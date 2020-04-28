@@ -145,7 +145,7 @@ class DynamicGraphEncoder(Module):
                 ps.append(ps[i] + self.tau * dp)
                 qs.append(qs[i] + self.tau * dq)
             else:
-                pass
+                raise NotImplementedError()
             c_losses.append((mol_node_matrix @ qs[i + 1]).norm())
 
         f, _ = self.readout(torch.cat([ps[-1], qs[-1]], dim=1), mol_node_matrix, mol_node_mask)
