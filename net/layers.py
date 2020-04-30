@@ -84,35 +84,42 @@ class MapPooling(Module):
         return torch.sum(self.linear(node_features), dim=0)
 
 
-class DirectDerivation(Module):
-    def __init__(self, p_dim, q_dim, c_dim, h_dim=128):
-        super(DirectDerivation, self).__init__()
-        self.p_dim = p_dim
-        self.q_dim = q_dim
-        self.W_dp_dq1 = Linear(p_dim + q_dim + c_dim, h_dim)
+class GraphConvolutionLayer(Module):
+    def __init__(self, in_dim, out_dim, hidden_dim=128, activation=None):
+        super(GraphConvolutionLayer, self).__init__()
+        self.linear1 = Linear(in_dim, hidden_dim)
         self.relu = LeakyReLU()
-        self.W_dp_dq2 = Linear(h_dim, p_dim + q_dim)
+        self.linear2 = Linear(hidden_dim, out_dim)
+        self.activation = activation
 
-    def forward(self, p, q, c):
-        u = torch.cat([p, q, c], dim=1)
-        dp_dq = self.W_dp_dq2(self.relu(self.W_dp_dq1(u)))
+    def forward(self, x: torch.Tensor, a: torch.Tensor):
+        h = a @ self.linear2(self.relu(self.linear1(x)))
+        if self.activation:
+            h = self.activation(h)
+        return h
+
+
+class DirectDerivation(Module):
+    def __init__(self, p_dim, q_dim):
+        super(DirectDerivation, self).__init__()
+        self.gcl = GraphConvolutionLayer(p_dim + q_dim, p_dim + q_dim)
+
+    def forward(self, p, q, e):
+        u = torch.cat([p, q], dim=1)
+        dp_dq = self.gcl(u, e)
         dp = dp_dq[:, :self.p_dim]
         dq = dp_dq[:, self.p_dim:]
         return dp, dq
 
 
 class HamiltonianDerivation(Module):
-    def __init__(self, p_dim, q_dim, c_dim, h_dim=128):
+    def __init__(self, p_dim, q_dim):
         super(HamiltonianDerivation, self).__init__()
-        self.p_dim = p_dim
-        self.q_dim = q_dim
-        self.W_dp_dq1 = Linear(p_dim + q_dim + c_dim, h_dim)
-        self.relu = LeakyReLU()
-        self.W_dp_dq2 = Linear(h_dim, 1)
+        self.gcl = GraphConvolutionLayer(p_dim + q_dim, p_dim + q_dim)
 
-    def forward(self, p, q, c):
-        u = torch.cat([p, q, c], dim=1)
-        hamilton = self.W_dp_dq2(self.relu(self.W_dp_dq1(u))).sum()
+    def forward(self, p, q, e):
+        u = torch.cat([p, q], dim=1)
+        hamilton = self.gcl(u, e).sum()
         dq = autograd.grad(hamilton, p, create_graph=True)[0]
         dp = -1 * autograd.grad(hamilton, q, create_graph=True)[0]
         return dp, dq

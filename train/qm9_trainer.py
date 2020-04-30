@@ -109,8 +109,10 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True,
             mm_tuple = matrix_mask_dicts[name]
         else:
             n_node = nfs.shape[0]
-            mol_node_matrix, mol_node_mask = AMPNN.produce_node_edge_matrix(max(ms) + 1, ms, [1] * len(ms))
-            node_edge_matrix_global, node_edge_mask_global = AMPNN.produce_node_edge_matrix(n_node, us, [1] * len(us))
+            mol_node_matrix, mol_node_mask = \
+                AMPNN.produce_node_edge_matrix(max(ms) + 1, ms, ms, [1] * len(ms))
+            node_edge_matrix_global, node_edge_mask_global = \
+                AMPNN.produce_node_edge_matrix(n_node, us, vs, [1] * len(us))
             if use_cuda:
                 mol_node_matrix = mol_node_matrix.cuda()
                 mol_node_mask = mol_node_mask.cuda()
@@ -123,6 +125,8 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True,
                 matrix_mask_dicts[name] = mm_tuple
 
         embeddings, s_loss, c_loss, a_loss = model(nfs, mm_tuple)
+        # if np.random.randint(0, 1000) == 0:
+        #     print(embeddings.cpu().detach().numpy())
         s_losses.append(s_loss.cpu().item())
         c_losses.append(c_loss.cpu().item())
         a_losses.append(a_loss.cpu().item())

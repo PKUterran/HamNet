@@ -43,7 +43,7 @@ class AMPNN(Module):
                 matrix_mask_tuple: tuple, global_mask: list) -> (torch.Tensor, torch.Tensor):
         assert edge_features.shape[0] == len(us) and edge_features.shape[0] == len(vs), \
             '{}, {}, {}.'.format(edge_features.shape, len(us), len(vs))
-        t0 = time.time()                                        ### DEBUG
+        t0 = time.time()  ### DEBUG
         if edge_features.shape[0] == 0:
             edge_features = edge_features.reshape([0, self.e_dim])
         node_features = F.leaky_relu(self.FC_N(node_features))
@@ -55,23 +55,23 @@ class AMPNN(Module):
         # node_edge_matrix_global, node_edge_mask_global = matrix_mask_tuple[2], matrix_mask_tuple[3]
         # node_edge_matrix_local, node_edge_mask_local = matrix_mask_tuple[4], matrix_mask_tuple[5]
         for i in range(self.layers):
-            t1 = time.time()                                    ### DEBUG
+            t1 = time.time()  ### DEBUG
             u_features = layer_node_features[-1][us]
             v_features = layer_node_features[-1][vs]
             # node_edge_matrix = node_edge_matrix_global if global_mask[i] else node_edge_matrix_local
             # node_edge_mask = node_edge_mask_global if global_mask[i] else node_edge_mask_local
-            self.layer_forward_time[i][0] += time.time() - t1   ### DEBUG
+            self.layer_forward_time[i][0] += time.time() - t1  ### DEBUG
 
-            t1 = time.time()                                    ### DEBUG
+            t1 = time.time()  ### DEBUG
             context_features, new_edge_features = self.Ms[i](u_features, v_features, layer_edge_features[-1],
                                                              node_edge_matrix, node_edge_mask)
-            self.layer_forward_time[i][1] += time.time() - t1   ### DEBUG
+            self.layer_forward_time[i][1] += time.time() - t1  ### DEBUG
 
-            t1 = time.time()                                    ### DEBUG
+            t1 = time.time()  ### DEBUG
             new_node_features = self.Us[i](layer_node_features[-1], context_features)
-            self.layer_forward_time[i][2] += time.time() - t1   ### DEBUG
+            self.layer_forward_time[i][2] += time.time() - t1  ### DEBUG
 
-            t1 = time.time()                                    ### DEBUG
+            t1 = time.time()  ### DEBUG
             if i != self.layers - 1:
                 new_node_features = F.relu(new_node_features)
             if self.residual:
@@ -80,10 +80,10 @@ class AMPNN(Module):
             else:
                 layer_node_features.append(new_node_features)
             layer_edge_features.append(new_edge_features)
-            self.layer_forward_time[i][3] += time.time() - t1   ### DEBUG
+            self.layer_forward_time[i][3] += time.time() - t1  ### DEBUG
 
         readout, a = self.R(layer_node_features[-1], mol_node_matrix, mol_node_mask)
-        self.total_forward_time += time.time() - t0             ### DEBUG
+        self.total_forward_time += time.time() - t0  ### DEBUG
         return readout, a
 
     def get_inner_parameters(self):
@@ -93,12 +93,13 @@ class AMPNN(Module):
         )
 
     @staticmethod
-    def produce_node_edge_matrix(n_node: int, us: list, edge_mask: list) -> (torch.Tensor, torch.Tensor):
+    def produce_node_edge_matrix(n_node: int, us: list, vs: list, edge_mask: list) -> (torch.Tensor, torch.Tensor):
         us = np.array(us)
+        vs = np.array(vs)
         mat = np.full([n_node, us.shape[0]], 0., dtype=np.int)
         mask = np.full([n_node, us.shape[0]], -1e6, dtype=np.int)
         for i in range(n_node):
-            node_edge = np.logical_and(us == i, edge_mask)
+            node_edge = np.logical_and(np.logical_or(us == i, vs == i), edge_mask)
             mat[i, node_edge] = 1
             mask[i, node_edge] = 0
         mat = torch.from_numpy(mat).type(torch.float32)
@@ -115,32 +116,31 @@ class DynamicGraphEncoder(Module):
         self.discrete = discrete
         self.tau = tau
         self.gamma = gamma
+        self.use_cuda = use_cuda
 
         self.p_encoder = Linear(v_dim, p_dim)
         self.q_encoder = Linear(v_dim, q_dim)
-        self.c_encoder = Linear(q_dim, c_dim)
         if hamilton:
-            self.derivation = HamiltonianDerivation(p_dim, q_dim, c_dim)
+            self.derivation = HamiltonianDerivation(p_dim, q_dim)
         else:
-            self.derivation = DirectDerivation(p_dim, q_dim, c_dim)
+            self.derivation = DirectDerivation(p_dim, q_dim)
         self.readout = AttentivePooling(p_dim + q_dim)
 
     def forward(self, v_features: torch.Tensor, matrix_mask_tuple: tuple):
         mol_node_matrix, mol_node_mask = matrix_mask_tuple[0], matrix_mask_tuple[1]
         node_edge_matrix, node_edge_mask = matrix_mask_tuple[2], matrix_mask_tuple[3]
-        m = (mol_node_matrix.t() @ mol_node_matrix).unsqueeze(-1)
         e = node_edge_matrix @ node_edge_matrix.t()
-        e = e - torch.eye(e.shape[0]).cuda() * e
+        if self.use_cuda:
+            e_noi = e - torch.eye(e.shape[0]).cuda() * e
+        else:
+            e_noi = e - torch.eye(e.shape[0]) * e
 
         ps = [self.p_encoder(v_features)]
         qs = [self.q_encoder(v_features)]
         c_losses = [(mol_node_matrix @ qs[0]).norm()]
 
         for i in range(self.layers):
-            q1 = qs[i].unsqueeze(0)
-            q2 = qs[i].unsqueeze(1)
-            c = (m * self.c_encoder(q1 - q2)).sum(1)
-            dp, dq = self.derivation(ps[i], qs[i], c)
+            dp, dq = self.derivation(ps[i], qs[i], e)
             if self.discrete:
                 ps.append(ps[i] + self.tau * dp)
                 qs.append(qs[i] + self.tau * dq)
@@ -151,8 +151,13 @@ class DynamicGraphEncoder(Module):
         f, _ = self.readout(torch.cat([ps[-1], qs[-1]], dim=1), mol_node_matrix, mol_node_mask)
 
         s_loss = torch.abs(ps[-1]).sum()
-        c_loss = sum(c_losses)
-        a_loss = (e * F.relu((qs[-1].unsqueeze(0) - qs[-1].unsqueeze(1)).norm(dim=2) - self.gamma)).sum()
+        c_loss = sum(c_losses) * 0
+        dis = (qs[-1].unsqueeze(0) - qs[-1].unsqueeze(1)).norm(dim=2)
+        # if np.random.randint(0, 100) == 0:
+        #     print(dis.cpu().detach().numpy())
+        #     print(e_noi)
+        #     print((e_noi * F.relu(dis - self.gamma)).cpu().detach().numpy())
+        a_loss = (e_noi * F.relu(dis - self.gamma)).sum()
 
         return f, s_loss, c_loss, a_loss
 
