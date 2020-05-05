@@ -7,7 +7,8 @@ from itertools import chain
 from functools import reduce
 
 from .config import *
-from .layers import ConcatMesPassing, GRUAggregation, AttentivePooling, DirectDerivation, HamiltonianDerivation
+from .layers import ConcatMesPassing, GRUAggregation, AttentivePooling, DirectDerivation, HamiltonianDerivation, \
+    GraphConvolutionLayer
 
 
 class AMPNN(Module):
@@ -31,7 +32,7 @@ class AMPNN(Module):
         self.Ms = [ConcatMesPassing(in_dims[i], he_dim, c_dims[i], dropout=dropout) for i in range(layers)]
         # self.Us = [DirectAggregation() for _ in range(layers)]
         self.Us = [GRUAggregation(c_dims[i], in_dims[i]) for i in range(layers)]
-        self.R = AttentivePooling(in_dims[-1], use_cuda, dropout=dropout)
+        self.R = AttentivePooling(in_dims[-1], in_dims[-1], use_cuda, dropout=dropout)
         # self.R = MapPooling(in_dims[-1], int(head_num * in_dims[-1]))
         self.layers = layers
         self.residual = residual
@@ -108,8 +109,8 @@ class AMPNN(Module):
 
 
 class DynamicGraphEncoder(Module):
-    def __init__(self, v_dim, p_dim, q_dim, c_dim, layers, hamilton=False, discrete=True, tau=0.2, gamma=1,
-                 use_cuda=True):
+    def __init__(self, v_dim, e_dim, p_dim, q_dim, f_dim, layers, hamilton=False, discrete=True, tau=0.2, gamma=1,
+                 dropout=0., use_cuda=True):
         super(DynamicGraphEncoder, self).__init__()
         self.layers = layers
         self.hamilton = hamilton
@@ -118,25 +119,29 @@ class DynamicGraphEncoder(Module):
         self.gamma = gamma
         self.use_cuda = use_cuda
 
-        self.p_encoder = Linear(v_dim, p_dim)
-        self.q_encoder = Linear(v_dim, q_dim)
+        self.e_encoder = Linear(v_dim + e_dim + v_dim, 1)
+        self.p_encoder = GraphConvolutionLayer(v_dim, p_dim, activation=torch.tanh)
+        self.q_encoder = GraphConvolutionLayer(v_dim, q_dim, activation=torch.tanh)
         if hamilton:
             self.derivation = HamiltonianDerivation(p_dim, q_dim)
         else:
             self.derivation = DirectDerivation(p_dim, q_dim)
-        self.readout = AttentivePooling(p_dim + q_dim)
+        self.readout = AttentivePooling(v_dim + p_dim + q_dim, f_dim, use_cuda=use_cuda, dropout=dropout)
 
-    def forward(self, v_features: torch.Tensor, matrix_mask_tuple: tuple):
+    def forward(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list, matrix_mask_tuple: tuple):
         mol_node_matrix, mol_node_mask = matrix_mask_tuple[0], matrix_mask_tuple[1]
         node_edge_matrix, node_edge_mask = matrix_mask_tuple[2], matrix_mask_tuple[3]
-        e = node_edge_matrix @ node_edge_matrix.t()
+
+        u_e_v_features = torch.cat([v_features[us], e_features, v_features[vs]], dim=1)
+        e_weight = torch.diag(torch.sigmoid(self.e_encoder(u_e_v_features)).view([-1]))
+        e = node_edge_matrix @ e_weight @ node_edge_matrix.t()
         if self.use_cuda:
             e_noi = e - torch.eye(e.shape[0]).cuda() * e
         else:
             e_noi = e - torch.eye(e.shape[0]) * e
 
-        ps = [self.p_encoder(v_features)]
-        qs = [self.q_encoder(v_features)]
+        ps = [self.p_encoder(v_features, e)]
+        qs = [self.q_encoder(v_features, e)]
         c_losses = [(mol_node_matrix @ qs[0]).norm()]
 
         for i in range(self.layers):
@@ -148,16 +153,16 @@ class DynamicGraphEncoder(Module):
                 raise NotImplementedError()
             c_losses.append((mol_node_matrix @ qs[i + 1]).norm())
 
-        f, _ = self.readout(torch.cat([ps[-1], qs[-1]], dim=1), mol_node_matrix, mol_node_mask)
+        f, _ = self.readout(torch.cat([v_features, ps[-1], qs[-1]], dim=1), mol_node_matrix, mol_node_mask)
 
         s_loss = torch.abs(ps[-1]).sum()
-        c_loss = sum(c_losses) * 0
+        c_loss = sum(c_losses)
         dis = (qs[-1].unsqueeze(0) - qs[-1].unsqueeze(1)).norm(dim=2)
         # if np.random.randint(0, 100) == 0:
         #     print(dis.cpu().detach().numpy())
         #     print(e_noi)
         #     print((e_noi * F.relu(dis - self.gamma)).cpu().detach().numpy())
-        a_loss = (e_noi * F.relu(dis - self.gamma)).sum()
+        a_loss = (e_noi * (dis - self.gamma) ** 2).sum()
 
         return f, s_loss, c_loss, a_loss
 

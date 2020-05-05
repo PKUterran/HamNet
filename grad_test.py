@@ -7,13 +7,16 @@ from torch.nn import Linear
 # m = (m.t() @ m).unsqueeze(-1)
 # print(m)
 
-m = torch.tensor([[1, 0], [1, 1], [0, 1]], dtype=torch.float32)
-m = m @ m.t()
-e = m - torch.eye(m.shape[0]) * m
-print(e)
-q = torch.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=torch.float32)
-r = (e * F.relu((q.unsqueeze(0) - q.unsqueeze(1)).norm(dim=2) - 1)).sum()
-print(r)
+m = torch.tensor([[1], [0], [2]], dtype=torch.float32)
+print(torch.diag(m.view([-1])))
+
+# m = torch.tensor([[1, 0], [1, 1], [0, 1]], dtype=torch.float32)
+# m = m @ m.t()
+# e = m - torch.eye(m.shape[0]) * m
+# print(e)
+# q = torch.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=torch.float32)
+# r = (e * F.relu((q.unsqueeze(0) - q.unsqueeze(1)).norm(dim=2) - 1)).sum()
+# print(r)
 # w = Linear(3, 2)
 # q1 = q.unsqueeze(0)
 # print(q1)

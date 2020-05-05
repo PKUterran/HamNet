@@ -9,4 +9,4 @@ from train.qm9_trainer import train_qm9
 # print(molecules.bond_set)
 # print(molecules.molecules[-1].show())
 
-train_qm9(use_cuda=True, limit=20000)
+train_qm9(use_cuda=True, limit=10000)

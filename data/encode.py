@@ -106,23 +106,27 @@ def encode_smiles(smiles: np.ndarray) -> list:
         info = {}
         mol = Chem.MolFromSmiles(smile)
         info['nf'] = np.stack([atom_features(a) for a in mol.GetAtoms()])
-        info['ef'] = np.stack([bond_features(b) for b in mol.GetBonds()] +
-                              [bond_features(b) for b in mol.GetBonds()]) if len(mol.GetBonds()) \
+        info['ef'] = np.stack([bond_features(b) for b in mol.GetBonds()]
+                              # + [bond_features(b) for b in mol.GetBonds()]
+                              ) if len(mol.GetBonds()) \
             else np.zeros(shape=[0, 10], dtype=np.int)
-        info['us'] = np.array([b.GetBeginAtomIdx() for b in mol.GetBonds()] +
-                              [b.GetEndAtomIdx() for b in mol.GetBonds()], dtype=np.int)
-        info['vs'] = np.array([b.GetEndAtomIdx() for b in mol.GetBonds()] +
-                              [b.GetBeginAtomIdx() for b in mol.GetBonds()], dtype=np.int)
+        info['us'] = np.array([b.GetBeginAtomIdx() for b in mol.GetBonds()]
+                              # + [b.GetEndAtomIdx() for b in mol.GetBonds()]
+                              , dtype=np.int)
+        info['vs'] = np.array([b.GetEndAtomIdx() for b in mol.GetBonds()]
+                              # + [b.GetBeginAtomIdx() for b in mol.GetBonds()]
+                              , dtype=np.int)
         info['em'] = np.array([1 - int(b.GetBondType() == Chem.rdchem.BondType.SINGLE
                                        and b.GetBeginAtom().GetSymbol() in ['C', 'N']
                                        and b.GetEndAtom().GetSymbol() in ['C', 'N']
                                        and not b.IsInRing())
-                               for b in mol.GetBonds()] +
-                              [1 - int(b.GetBondType() == Chem.rdchem.BondType.SINGLE
-                                       and b.GetBeginAtom().GetSymbol() in ['C', 'N']
-                                       and b.GetEndAtom().GetSymbol() in ['C', 'N']
-                                       and not b.IsInRing())
-                               for b in mol.GetBonds()], dtype=np.int)
+                               for b in mol.GetBonds()]
+                              # + [1 - int(b.GetBondType() == Chem.rdchem.BondType.SINGLE
+                              #            and b.GetBeginAtom().GetSymbol() in ['C', 'N']
+                              #            and b.GetEndAtom().GetSymbol() in ['C', 'N']
+                              #            and not b.IsInRing())
+                              #    for b in mol.GetBonds()]
+                              , dtype=np.int)
         ret.append(info)
         cnt += 1
         if cnt % 10000 == 0:

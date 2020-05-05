@@ -57,9 +57,9 @@ class GRUAggregation(Module):
 
 
 class AttentivePooling(Module):
-    def __init__(self, dim: int, use_cuda=False, dropout=0.):
+    def __init__(self, dim: int, out_dim: int, use_cuda=False, dropout=0.):
         super(AttentivePooling, self).__init__()
-        self.linear1 = Linear(dim, dim, bias=True)
+        self.linear1 = Linear(dim, out_dim, bias=True)
         self.linear2 = Linear(dim, 1, bias=True)
         self.softmax = Softmax(dim=1)
         self.use_cuda = use_cuda
@@ -85,7 +85,7 @@ class MapPooling(Module):
 
 
 class GraphConvolutionLayer(Module):
-    def __init__(self, in_dim, out_dim, hidden_dim=128, activation=None):
+    def __init__(self, in_dim, out_dim, hidden_dim=32, activation=None):
         super(GraphConvolutionLayer, self).__init__()
         self.linear1 = Linear(in_dim, hidden_dim)
         self.relu = LeakyReLU()
@@ -93,7 +93,7 @@ class GraphConvolutionLayer(Module):
         self.activation = activation
 
     def forward(self, x: torch.Tensor, a: torch.Tensor):
-        h = a @ self.linear2(self.relu(self.linear1(x)))
+        h = a @ self.linear2(self.relu(a @ self.linear1(x)))
         if self.activation:
             h = self.activation(h)
         return h

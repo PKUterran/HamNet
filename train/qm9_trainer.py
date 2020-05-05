@@ -57,17 +57,18 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True,
     norm_properties = (properties - prop_mean) / prop_std
 
     model = DynamicGraphEncoder(v_dim=n_dim,
+                                e_dim=e_dim,
                                 p_dim=P_DIM,
                                 q_dim=Q_DIM,
-                                c_dim=C_DIM,
+                                f_dim=F_DIM,
                                 layers=LAYERS,
                                 hamilton=True,
                                 discrete=True,
                                 gamma=GAMMA,
                                 tau=TAU,
+                                dropout=DROPOUT,
                                 use_cuda=use_cuda)
-    r_dim = P_DIM + Q_DIM
-    regression = MLP(r_dim, MLP_HIDDEN, len(prop), dropout=DROPOUT)
+    regression = MLP(F_DIM, MLP_HIDDEN, len(prop), dropout=DROPOUT)
     if use_cuda:
         model.cuda()
         regression.cuda()
@@ -124,7 +125,7 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True,
             if name and len(matrix_mask_dicts.keys()) < MAX_DICT:
                 matrix_mask_dicts[name] = mm_tuple
 
-        embeddings, s_loss, c_loss, a_loss = model(nfs, mm_tuple)
+        embeddings, s_loss, c_loss, a_loss = model(nfs, efs, us, vs, mm_tuple)
         # if np.random.randint(0, 1000) == 0:
         #     print(embeddings.cpu().detach().numpy())
         s_losses.append(s_loss.cpu().item())
@@ -147,18 +148,25 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True,
     def train(mask_list: list, name=None):
         model.train()
         regression.train()
-        for i, m in tqdm(enumerate(mask_list), total=len(mask_list)):
-            if name:
-                name_ = name + str(i)
-            else:
-                name_ = None
-            optimizer.zero_grad()
-            logits, target, std_loss = forward(m, name=name_)
-            u_loss = calc_normalized_loss(logits, target)
-            u_losses.append(u_loss.cpu().item())
-            loss = u_loss + std_loss
-            loss.backward()
-            optimizer.step()
+
+        s_losses.clear()
+        c_losses.clear()
+        a_losses.clear()
+        u_losses.clear()
+
+        with tqdm(enumerate(mask_list), total=len(mask_list)) as t:
+            for i, m in t:
+                if name:
+                    name_ = name + str(i)
+                else:
+                    name_ = None
+                optimizer.zero_grad()
+                logits, target, std_loss = forward(m, name=name_)
+                u_loss = calc_normalized_loss(logits, target)
+                u_losses.append(u_loss.cpu().item())
+                loss = u_loss + std_loss
+                loss.backward()
+                optimizer.step()
 
         print('Stationary loss: {:.4f}'.format(np.average(s_losses)))
         print('Centrality loss: {:.4f}'.format(np.average(c_losses)))
@@ -170,16 +178,17 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True,
         regression.eval()
         losses = []
         maes = []
-        for i, m in tqdm(enumerate(mask_list), total=len(mask_list)):
-            if name:
-                name_ = name + str(i)
-            else:
-                name_ = None
-            logits, target, _ = forward(m, name=name_)
-            loss = calc_normalized_loss(logits, target)
-            mae = torch.abs(logits - target).mean(dim=0)
-            losses.append(loss.cpu().item())
-            maes.append(mae.cpu().detach().numpy())
+        with tqdm(enumerate(mask_list), total=len(mask_list)) as t:
+            for i, m in t:
+                if name:
+                    name_ = name + str(i)
+                else:
+                    name_ = None
+                logits, target, _ = forward(m, name=name_)
+                loss = calc_normalized_loss(logits, target)
+                mae = torch.abs(logits - target).mean(dim=0)
+                losses.append(loss.cpu().item())
+                maes.append(mae.cpu().detach().numpy())
         print('\t\tLoss: {:.3f}'.format(np.average(losses)))
         print('\t\tMAE: {}.'.format(np.average(maes, axis=0) * prop_std))
 
