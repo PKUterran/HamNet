@@ -85,7 +85,7 @@ class MapPooling(Module):
 
 
 class GraphConvolutionLayer(Module):
-    def __init__(self, in_dim, out_dim, hidden_dim=32, activation=None):
+    def __init__(self, in_dim, out_dim, hidden_dim=128, activation=None):
         super(GraphConvolutionLayer, self).__init__()
         self.linear1 = Linear(in_dim, hidden_dim)
         self.relu = LeakyReLU()
@@ -100,26 +100,31 @@ class GraphConvolutionLayer(Module):
 
 
 class DirectDerivation(Module):
-    def __init__(self, p_dim, q_dim):
+    def __init__(self, p_dim, q_dim, h_dim=128):
         super(DirectDerivation, self).__init__()
-        self.gcl = GraphConvolutionLayer(p_dim + q_dim, p_dim + q_dim)
+        self.gcl = GraphConvolutionLayer(p_dim + q_dim, h_dim)
+        self.relu = ELU()
+        self.linear = Linear(h_dim, p_dim + q_dim)
 
     def forward(self, p, q, e):
         u = torch.cat([p, q], dim=1)
-        dp_dq = self.gcl(u, e)
+        dp_dq = self.linear(self.relu(self.gcl(u, e)))
         dp = dp_dq[:, :self.p_dim]
         dq = dp_dq[:, self.p_dim:]
         return dp, dq
 
 
 class HamiltonianDerivation(Module):
-    def __init__(self, p_dim, q_dim):
+    def __init__(self, p_dim, q_dim, h_dim=128, dropout=0.0):
         super(HamiltonianDerivation, self).__init__()
-        self.gcl = GraphConvolutionLayer(p_dim + q_dim, p_dim + q_dim)
+        self.gcl = GraphConvolutionLayer(p_dim + q_dim, h_dim)
+        self.relu = ELU()
+        self.linear = Linear(h_dim, 1)
+        self.dropout = Dropout(dropout)
 
     def forward(self, p, q, e):
         u = torch.cat([p, q], dim=1)
-        hamilton = self.gcl(u, e).sum()
+        hamilton = self.linear(self.dropout(self.relu(self.gcl(u, e)))).sum()
         dq = autograd.grad(hamilton, p, create_graph=True)[0]
         dp = -1 * autograd.grad(hamilton, q, create_graph=True)[0]
         return dp, dq

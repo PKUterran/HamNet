@@ -4,19 +4,19 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import gc
-from torch.nn import MSELoss, CrossEntropyLoss
+from torch.nn import MSELoss
 from itertools import chain
 from statsmodels import robust
 from tqdm import tqdm
 
 from .config import *
 from .HeteroGraph import HeteroGraph
-from data.reader import load_qm9
+from data.reader import load_lipop
 from utils.sample import sample
 from net.models import DynamicGraphEncoder, MLP, AMPNN
 from visualize.regress import plt_multiple_scatter
 
-GRAPH_PATH = 'graphs/QM9/'
+GRAPH_PATH = 'graphs/Lipop/'
 
 
 def set_seed(seed: int, use_cuda: bool):
@@ -26,12 +26,12 @@ def set_seed(seed: int, use_cuda: bool):
         torch.cuda.manual_seed(seed)
 
 
-def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tqdm=True,
-              prop=list(range(12)), use_model='HamGN'):
+def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tqdm=True,
+              prop=list(range(1)), use_model='HamGN'):
     set_seed(seed, use_cuda)
     np.set_printoptions(precision=4, suppress=True, linewidth=140)
 
-    smiles, info_list, properties = load_qm9(limit)
+    smiles, info_list, properties = load_lipop(limit)
     properties = properties[:, prop]
     molecules = [HeteroGraph(info['nf'], info['ef'], info['us'], info['vs'], info['em']) for info in info_list]
     n_dim = molecules[0].n_dim
@@ -55,7 +55,6 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
     print('std:', prop_std)
     prop_mad = robust.mad(t_properties.tolist(), axis=0)
     print('mad:', prop_mad)
-    ratio = (prop_std / prop_mad) ** 2
     norm_properties = (properties - prop_mean) / prop_std
 
     if use_model == 'HamGN':
@@ -160,12 +159,6 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
             target = target.cuda()
         return logits, target, std_loss
 
-    def calc_normalized_loss(logits, target):
-        losses = []
-        for i in range(len(prop)):
-            losses.append(loss_fuc(logits[:, i], target[:, i]) * ratio[i])
-        return sum(losses)
-
     def train(mask_list: list, name=None):
         model.train()
         regression.train()
@@ -185,7 +178,9 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
                 name_ = None
             optimizer.zero_grad()
             logits, target, std_loss = forward(m, name=name_)
-            u_loss = calc_normalized_loss(logits, target)
+            # print(logits.cpu())
+            # print(target.cpu())
+            u_loss = loss_fuc(logits, target)
             u_losses.append(u_loss.cpu().item())
             loss = u_loss + std_loss
             loss.backward()
@@ -201,7 +196,6 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
         model.eval()
         regression.eval()
         losses = []
-        maes = []
         masks = []
         logits_list = []
         target_list = []
@@ -214,19 +208,16 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
             else:
                 name_ = None
             logits, target, _ = forward(m, name=name_)
-            loss = calc_normalized_loss(logits, target)
-            mae = torch.abs(logits - target).mean(dim=0)
+            loss = loss_fuc(logits, target) * prop_std[0]
             losses.append(loss.cpu().item())
-            maes.append(mae.cpu().detach().numpy())
 
             if visualize:
                 masks.extend(m)
                 logits_list.append(logits.cpu().detach().numpy())
                 target_list.append(target.cpu().detach().numpy())
 
-        print('\t\tLoss: {:.3f}'.format(np.average(losses)))
-        print('\t\tMAE: {}.'.format(np.average(maes, axis=0) * prop_std))
-
+        print('\t\tMSE Loss: {:.3f}'.format(np.average(losses)))
+        print('\t\tRMSE Loss: {:.3f}'.format(np.average([l ** 0.5 for l in losses])))
         if visualize:
             all_logits = np.vstack(logits_list)
             all_target = np.vstack(target_list)

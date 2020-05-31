@@ -1,14 +1,25 @@
-import torch
-import torch.autograd as ag
-import torch.nn.functional as F
-from torch.nn import Linear
+# import torch
+# import torch.autograd as ag
+# import torch.nn.functional as F
+# from torch.nn import Linear
+from sklearn.metrics import roc_auc_score
+
+import numpy as np
+a1 = np.array([1, 2, 3])
+a2 = np.array([0, 1, 1])
+a = a1[a2 == 1]
+print(a)
+# a = a.sum(axis=1)
+# print(a)
+# m = np.argsort(a)[-2:]
+# print(m)
 
 # m = torch.tensor([[1, 1, 0], [0, 0, 1]], dtype=torch.float32)
 # m = (m.t() @ m).unsqueeze(-1)
 # print(m)
 
-m = torch.tensor([[1], [0], [2]], dtype=torch.float32)
-print(torch.diag(m.view([-1])))
+# m = torch.tensor([[1], [0], [2]], dtype=torch.float32)
+# print(torch.diag(m.view([-1])))
 
 # m = torch.tensor([[1, 0], [1, 1], [0, 1]], dtype=torch.float32)
 # m = m @ m.t()

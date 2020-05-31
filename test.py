@@ -1,6 +1,6 @@
-# import numpy as np
+import numpy as np
 # import pandas as pd
-import torch
+# import torch
 
 # qm = np.load('data/QM9/QM9_nano.npz', allow_pickle=True)
 # print(qm['Atoms'])
@@ -20,10 +20,10 @@ import torch
 # b = np.array([0, 1, 1, 0])
 # print(np.logical_and(a == 3, b))
 
-from data.qm9_reader import load_qm9
-from data.encode import *
-
-_, mols, _ = load_qm9(force_save=True)
+# from data.reader import load_qm9
+# from data.encode import *
+#
+# _, mols, _ = load_qm9(force_save=True)
 # print(len(mols))
 # print(mols[0])
 # print(mols[10000])
@@ -42,3 +42,11 @@ _, mols, _ = load_qm9(force_save=True)
 # n_seg = int(len(mask) / BATCH) + 1
 # mask_list = [mask[i::n_seg] for i in range(n_seg)]
 # print(mask_list)
+
+a = [0.451, 0.492, 0.00358, 0.00415, 0.00528, 26.839 , 0.00120, 0.898 , 0.893 , 0.893 , 0.893 , 0.252]
+b = [1.189, 6.299, 0.016  , 0.039  , 0.040  , 202.017, 0.026  , 31.072, 31.072, 31.072, 31.072, 3.204]
+a = np.array(a)
+b = np.array(b)
+c = a / b
+print(c)
+print(c.sum())

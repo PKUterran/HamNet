@@ -39,12 +39,14 @@ ATOMS = [
 def atom_features(atom,
                   explicit_H=True,
                   use_chirality=True,
-                  default_atoms=None):
+                  default_atoms=None,
+                  position=0,
+                  max_position=0):
     if not default_atoms:
         default_atoms = ATOMS
     results = \
         one_of_k_encoding_unk(atom.GetSymbol(), default_atoms) + \
-        one_of_k_encoding(atom.GetDegree(), [0, 1, 2, 3, 4, 5]) + \
+        one_of_k_encoding_unk(atom.GetDegree(), [0, 1, 2, 3, 4, 5]) + \
         [atom.GetFormalCharge(), atom.GetNumRadicalElectrons()] + \
         one_of_k_encoding_unk(atom.GetHybridization(), [
             Chem.rdchem.HybridizationType.SP, Chem.rdchem.HybridizationType.SP2,
@@ -52,6 +54,8 @@ def atom_features(atom,
             Chem.rdchem.HybridizationType.SP3D2, 'other'
         ]) + \
         [atom.GetIsAromatic()]
+    if max_position:
+        results = results + one_of_k_encoding_unk(position, list(range(max_position)))
     # In case of explicit hydrogen(QM8, QM9), avoid calling `GetTotalNumHs`
     if not explicit_H:
         results = results + one_of_k_encoding_unk(atom.GetTotalNumHs(), [0, 1, 2, 3, 4])
@@ -98,18 +102,25 @@ def num_bond_features():
     return len(bond_features(simple_mol.GetBonds()[0]))
 
 
-def encode_smiles(smiles: np.ndarray) -> list:
+def encode_smiles(smiles: np.ndarray, return_mask=False, max_position=0):
     ret = []
+    mask = []
     print('Start encoding...')
     cnt = 0
     for smile in smiles:
         info = {}
         mol = Chem.MolFromSmiles(smile)
-        info['nf'] = np.stack([atom_features(a) for a in mol.GetAtoms()])
+        if return_mask:
+            if not mol:
+                cnt += 1
+                continue
+            else:
+                mask.append(cnt)
+        info['nf'] = np.stack([atom_features(a, position=i, max_position=max_position)
+                               for i, a in enumerate(mol.GetAtoms())])
         info['ef'] = np.stack([bond_features(b) for b in mol.GetBonds()]
                               # + [bond_features(b) for b in mol.GetBonds()]
-                              ) if len(mol.GetBonds()) \
-            else np.zeros(shape=[0, 10], dtype=np.int)
+                              ) if len(mol.GetBonds()) else np.zeros(shape=[0, 10], dtype=np.int)
         info['us'] = np.array([b.GetBeginAtomIdx() for b in mol.GetBonds()]
                               # + [b.GetEndAtomIdx() for b in mol.GetBonds()]
                               , dtype=np.int)
@@ -131,4 +142,7 @@ def encode_smiles(smiles: np.ndarray) -> list:
         cnt += 1
         if cnt % 10000 == 0:
             print(cnt, 'encoded.')
+    print('Encoded:', len(ret))
+    if return_mask:
+        return ret, mask
     return ret

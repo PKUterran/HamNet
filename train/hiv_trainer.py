@@ -1,22 +1,23 @@
 import numpy as np
-import time
+# import time
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import gc
-from torch.nn import MSELoss, CrossEntropyLoss
+from torch.nn import CrossEntropyLoss
 from itertools import chain
-from statsmodels import robust
 from tqdm import tqdm
+from sklearn.metrics import roc_auc_score
 
 from .config import *
 from .HeteroGraph import HeteroGraph
-from data.reader import load_qm9
+from data.reader import load_hiv, load_bbbp
 from utils.sample import sample
 from net.models import DynamicGraphEncoder, MLP, AMPNN
 from visualize.regress import plt_multiple_scatter
 
-GRAPH_PATH = 'graphs/QM9/'
+HIV_GRAPH_PATH = 'graphs/HIV/'
+BBBP_GRAPH_PATH = 'graphs/BBBP/'
 
 
 def set_seed(seed: int, use_cuda: bool):
@@ -26,13 +27,23 @@ def set_seed(seed: int, use_cuda: bool):
         torch.cuda.manual_seed(seed)
 
 
-def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tqdm=True,
-              prop=list(range(12)), use_model='HamGN'):
+def train_hiv(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tqdm=True, use_model='HamGN',
+              dataset='HIV'):
     set_seed(seed, use_cuda)
     np.set_printoptions(precision=4, suppress=True, linewidth=140)
 
-    smiles, info_list, properties = load_qm9(limit)
-    properties = properties[:, prop]
+    if dataset == 'HIV':
+        smiles, info_list, properties = load_hiv(limit)
+        graph_path = HIV_GRAPH_PATH
+    elif dataset == 'BBBP':
+        smiles, info_list, properties = load_bbbp(limit)
+        graph_path = BBBP_GRAPH_PATH
+    else:
+        assert False, "Unknown dataset: {}.".format(dataset)
+    n_label = properties.max() + 1
+    properties = torch.tensor(properties, dtype=torch.int64)
+    if use_cuda:
+        properties = properties.cuda()
     molecules = [HeteroGraph(info['nf'], info['ef'], info['us'], info['vs'], info['em']) for info in info_list]
     n_dim = molecules[0].n_dim
     e_dim = molecules[0].e_dim
@@ -47,16 +58,6 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
     test_mask_list = [test_mask[i::n_seg] for i in range(n_seg)]
     print(train_mask, validate_mask, test_mask)
     print(len(train_mask_list), len(validate_mask_list), len(test_mask_list))
-
-    t_properties = properties[train_mask, :]
-    prop_mean = np.mean(t_properties, axis=0)
-    print('mean:', prop_mean)
-    prop_std = np.std(t_properties.tolist(), axis=0, ddof=1)
-    print('std:', prop_std)
-    prop_mad = robust.mad(t_properties.tolist(), axis=0)
-    print('mad:', prop_mad)
-    ratio = (prop_std / prop_mad) ** 2
-    norm_properties = (properties - prop_mean) / prop_std
 
     if use_model == 'HamGN':
         model = DynamicGraphEncoder(v_dim=n_dim,
@@ -83,15 +84,15 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
                       dropout=DROPOUT)
     else:
         assert False, 'Undefined model: {}!'.format(use_model)
-    regression = MLP(F_DIM, MLP_HIDDEN, len(prop), dropout=DROPOUT)
+    classifier = MLP(F_DIM, MLP_HIDDEN, n_label, dropout=DROPOUT, activation='softmax')
     if use_cuda:
         model.cuda()
-        regression.cuda()
-    params = list(chain(model.parameters(), regression.parameters()))
+        classifier.cuda()
+    params = list(chain(model.parameters(), classifier.parameters()))
     for param in params:
         print(param.shape)
     optimizer = optim.Adam(params, lr=LR, weight_decay=DECAY)
-    loss_fuc = MSELoss()
+    loss_fuc = CrossEntropyLoss()
     # forward_time = 0.
     bp_time = 0.
     matrix_mask_dicts = {}
@@ -153,22 +154,16 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
             std_loss = 0
         else:
             assert False
-        logits = regression(embeddings)
-        target = norm_properties[mask, :]
-        target = torch.tensor(target.astype(np.float32), dtype=torch.float32)
+        logits = classifier(embeddings)
+        # print(logits.cpu())
+        target = properties[mask]
         if use_cuda:
             target = target.cuda()
         return logits, target, std_loss
 
-    def calc_normalized_loss(logits, target):
-        losses = []
-        for i in range(len(prop)):
-            losses.append(loss_fuc(logits[:, i], target[:, i]) * ratio[i])
-        return sum(losses)
-
     def train(mask_list: list, name=None):
         model.train()
-        regression.train()
+        classifier.train()
 
         s_losses.clear()
         c_losses.clear()
@@ -185,7 +180,7 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
                 name_ = None
             optimizer.zero_grad()
             logits, target, std_loss = forward(m, name=name_)
-            u_loss = calc_normalized_loss(logits, target)
+            u_loss = loss_fuc(logits, target)
             u_losses.append(u_loss.cpu().item())
             loss = u_loss + std_loss
             loss.backward()
@@ -199,9 +194,8 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
 
     def evaluate(mask_list: list, name=None, visualize=None):
         model.eval()
-        regression.eval()
+        classifier.eval()
         losses = []
-        maes = []
         masks = []
         logits_list = []
         target_list = []
@@ -214,24 +208,22 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
             else:
                 name_ = None
             logits, target, _ = forward(m, name=name_)
-            loss = calc_normalized_loss(logits, target)
-            mae = torch.abs(logits - target).mean(dim=0)
+            loss = loss_fuc(logits, target)
             losses.append(loss.cpu().item())
-            maes.append(mae.cpu().detach().numpy())
 
+            logits_list.append(logits.cpu().detach().numpy())
+            target_list.append(target.cpu().detach().numpy())
             if visualize:
                 masks.extend(m)
-                logits_list.append(logits.cpu().detach().numpy())
-                target_list.append(target.cpu().detach().numpy())
 
+        all_logits = np.vstack(logits_list)
+        all_target = np.concatenate(target_list)
         print('\t\tLoss: {:.3f}'.format(np.average(losses)))
-        print('\t\tMAE: {}.'.format(np.average(maes, axis=0) * prop_std))
+        print('\t\tROC: {:.3f}'.format(roc_auc_score(all_target, all_logits[:, 1])))
 
         if visualize:
-            all_logits = np.vstack(logits_list)
-            all_target = np.vstack(target_list)
             best_ids, best_ds, worst_ids, worst_ds = \
-                plt_multiple_scatter(GRAPH_PATH + visualize, masks, all_logits, all_target)
+                plt_multiple_scatter(graph_path + visualize, masks, all_logits, all_target)
             print('\t\tBest performance on:')
             for i, d in zip(best_ids, best_ds):
                 print('\t\t\t{}: {}'.format(smiles[i], d))
@@ -244,13 +236,11 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
         print('\tTraining: ')
         train(train_mask_list, name='train')
         print('\tEvaluating training: ')
-        evaluate(train_mask_list, name='train',
-                 visualize='{}_train_{}'.format(use_model, epoch + 1) if (epoch + 1) % EVAL == 0 else None)
+        evaluate(train_mask_list, name='train')
         print('\tEvaluating validation: ')
-        evaluate(validate_mask_list, name='evaluate',
-                 visualize='{}_val_{}'.format(use_model, epoch + 1) if (epoch + 1) % EVAL == 0 else None)
+        evaluate(validate_mask_list, name='evaluate')
         print('\tEvaluating test: ')
-        evaluate(test_mask_list, visualize='{}_test'.format(use_model) if epoch + 1 == ITERATION else None)
+        evaluate(test_mask_list)
         gc.collect()
 
     # print(model.total_forward_time)

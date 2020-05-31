@@ -15,7 +15,7 @@ class AMPNN(Module):
     def __init__(self, n_dim: int, e_dim: int, h_dim: int, c_dims: list, he_dim: int, layers: int,
                  residual=True, use_cuda=False, dropout=0.):
         super(AMPNN, self).__init__()
-        assert len(c_dims) == layers, '{},{}'.format(c_dims, layers)
+        assert len(c_dims) == layers, '{}, {}'.format(c_dims, layers)
 
         ### DEBUG MODE ###
         self.total_forward_time = 0.
@@ -123,7 +123,7 @@ class DynamicGraphEncoder(Module):
         self.p_encoder = GraphConvolutionLayer(v_dim, p_dim, activation=torch.tanh)
         self.q_encoder = GraphConvolutionLayer(v_dim, q_dim, activation=torch.tanh)
         if hamilton:
-            self.derivation = HamiltonianDerivation(p_dim, q_dim)
+            self.derivation = HamiltonianDerivation(p_dim, q_dim, dropout=dropout)
         else:
             self.derivation = DirectDerivation(p_dim, q_dim)
         self.readout = AttentivePooling(v_dim + p_dim + q_dim, f_dim, use_cuda=use_cuda, dropout=dropout)
@@ -135,10 +135,13 @@ class DynamicGraphEncoder(Module):
         u_e_v_features = torch.cat([v_features[us], e_features, v_features[vs]], dim=1)
         e_weight = torch.diag(torch.sigmoid(self.e_encoder(u_e_v_features)).view([-1]))
         e = node_edge_matrix @ e_weight @ node_edge_matrix.t()
+        # print(e.cpu())
+        e_ = node_edge_matrix @ node_edge_matrix.t()
+        # print(e_.cpu())
         if self.use_cuda:
-            e_noi = e - torch.eye(e.shape[0]).cuda() * e
+            e_noi = e_ - torch.eye(e_.shape[0]).cuda() * e_
         else:
-            e_noi = e - torch.eye(e.shape[0]) * e
+            e_noi = e_ - torch.eye(e_.shape[0]) * e_
 
         ps = [self.p_encoder(v_features, e)]
         qs = [self.q_encoder(v_features, e)]
@@ -168,7 +171,7 @@ class DynamicGraphEncoder(Module):
 
 
 class MLP(Module):
-    def __init__(self, i_dim: int, h_dim: int, o_dim: int, dropout=0.):
+    def __init__(self, i_dim: int, h_dim: int, o_dim: int, dropout=0., activation=None):
         super(MLP, self).__init__()
 
         # self.linear1 = Linear(i_dim, h_dim, bias=False)
@@ -178,10 +181,16 @@ class MLP(Module):
         self.linear1 = Linear(i_dim, o_dim, bias=True)
 
         self.dropout = Dropout(p=dropout)
+        self.activation = activation
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         # return self.linear2(self.act(self.linear1(self.dropout(inputs))))
-        return self.linear1(self.dropout(inputs))
+        h = self.linear1(self.dropout(inputs))
+        if self.activation == 'sigmoid':
+            h = torch.sigmoid(h)
+        elif self.activation == 'softmax':
+            h = torch.softmax(h, dim=1)
+        return h
 
 
 if __name__ == '__main__':
