@@ -50,3 +50,39 @@ def load_gdb9(max_num: int = -1) -> (MoleculeSet, np.ndarray):
     assert properties.shape[0] == len(molecules.molecules)
 
     return molecules, properties
+
+
+def load_mol_atom_pos(max_num: int = -1) -> list:
+    mol_atom_pos = []
+    cnt = 0
+
+    with open('data/gdb9/gdb9.sdf') as content:
+        while True:
+            lines = []
+            atom_pos = []
+            while True:
+                line = content.readline()
+                if not line:
+                    break
+                line = line.strip()
+                lines.append(line)
+                if line == '$$$$':
+                    break
+            if len(lines) == 0:
+                break
+            n, *_ = [int(t) for t in lines[3].split()[:8]]
+            for i in range(4, 4 + n):
+                x, y, z, a, *_ = lines[i].split()
+                if a == 'H':
+                    continue
+                atom_pos.append([x, y, z])
+            mol_atom_pos.append(np.array(atom_pos, dtype=np.float))
+
+            cnt += 1
+            if cnt % 1e4 == 0:
+                print(cnt, 'loaded.')
+            if max_num != -1 and cnt >= max_num:
+                break
+
+    return mol_atom_pos
+

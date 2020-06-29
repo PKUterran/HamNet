@@ -6,6 +6,7 @@ import pickle
 
 from .encode import encode_smiles
 from .config import *
+from .gdb9_reader import load_mol_atom_pos as load_qm9_mol_atom_pos
 
 QM9_CSV_FILE = 'data/QM9/qm9.csv'
 QM9_RESOURCE_FILE = 'data/QM9/qm9.pickle'
@@ -28,19 +29,23 @@ def encode_onehot(p: np.ndarray):
     return ret
 
 
-def load_qm9(max_num: int = -1, force_save=False) -> (list, list, np.ndarray):
+def load_qm9(max_num: int = -1, force_save=False, use_pos=False) -> (list, list, np.ndarray):
     smile_properties_list = np.array(pd.read_csv(QM9_CSV_FILE))
     properties = smile_properties_list[:, 5: 17]
     smiles = smile_properties_list[:, 1]
+    if max_num != -1 and max_num < smile_properties_list.shape[0]:
+        smiles = smiles[: max_num]
+        properties = properties[: max_num]
+
     if force_save or not os.path.exists(QM9_RESOURCE_FILE):
-        info_list = encode_smiles(smiles, max_position=QM9_PC)
+        info_list = encode_smiles(smiles, max_position=QM9_PC, central_atoms=QM9_CA, max_dis=QM9_MD,
+                                  mol_atom_pos=load_qm9_mol_atom_pos(max_num) if use_pos else None)
         pickle.dump(info_list, open(QM9_RESOURCE_FILE, 'wb'))
     else:
         info_list = pickle.load(open(QM9_RESOURCE_FILE, 'rb'))
 
     if max_num != -1 and max_num < smile_properties_list.shape[0]:
         info_list = info_list[: max_num]
-        properties = properties[: max_num]
     return smiles, info_list, properties
 
 
@@ -64,7 +69,8 @@ def load_bbbp(max_num: int = -1, force_save=False) -> (list, list, np.ndarray):
     smile_properties_list = np.array(pd.read_csv(BBBP_CSV_FILE))
     properties = smile_properties_list[:, 0]
     smiles = smile_properties_list[:, 1]
-    info_list, mask = encode_smiles(smiles, return_mask=True)
+    info_list, mask = encode_smiles(smiles, return_mask=True,
+                                    max_position=BBBP_PC, central_atoms=BBBP_CA, max_dis=BBBP_MD)
     smiles = smiles[mask]
     properties = properties[mask]
 
@@ -81,7 +87,7 @@ def load_tox21(max_num: int = -1, force_save=False) -> (list, list, np.ndarray):
     properties = smile_properties_list[:, : 12]
     smiles = smile_properties_list[:, 13]
     if force_save or not os.path.exists(TOX21_RESOURCE_FILE):
-        info_list = encode_smiles(smiles, max_position=TOX21_PC)
+        info_list = encode_smiles(smiles, max_position=TOX21_PC, central_atoms=TOX21_CA, max_dis=TOX21_MD)
         pickle.dump(info_list, open(TOX21_RESOURCE_FILE, 'wb'))
     else:
         info_list = pickle.load(open(TOX21_RESOURCE_FILE, 'rb'))
@@ -97,7 +103,7 @@ def load_lipop(max_num: int = -1, force_save=False) -> (list, list, np.ndarray):
     properties = smile_properties_list[:, 1: 2]
     smiles = smile_properties_list[:, 2]
     if force_save or not os.path.exists(LIPOP_RESOURCE_FILE):
-        info_list = encode_smiles(smiles, max_position=LIPOP_PC)
+        info_list = encode_smiles(smiles, max_position=LIPOP_PC, central_atoms=LIPOP_CA, max_dis=LIPOP_MD)
         pickle.dump(info_list, open(LIPOP_RESOURCE_FILE, 'wb'))
     else:
         info_list = pickle.load(open(LIPOP_RESOURCE_FILE, 'rb'))

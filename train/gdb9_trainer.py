@@ -137,7 +137,7 @@ def train_gdb9(seed: int = 19700101, limit: int = -1, residual: bool = True, use
         r_dim = (n_dim + sum(hidden_dims))
     else:
         r_dim = hidden_dims[-1]
-    regression = MLP(int(r_dim * HEAD_NUM), MLP_HIDDEN, len(prop), dropout=DROPOUT)
+    regression = MLP(int(r_dim * HEAD_NUM), len(prop), [MLP_HIDDEN], dropout=DROPOUT)
     if use_cuda:
         model.cuda()
         regression.cuda()

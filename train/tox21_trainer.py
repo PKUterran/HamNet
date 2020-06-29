@@ -1,19 +1,19 @@
 import numpy as np
-# import time
 import torch
-import torch.nn.functional as F
 import torch.optim as optim
 import gc
-from torch.nn import L1Loss, MSELoss
+import os
+from torch.nn import BCELoss
 from itertools import chain
 from tqdm import tqdm
 from sklearn.metrics import roc_auc_score
 
-from .config import *
+from .config import MODEL_CONFIG_TOX21 as DEFAULT_CONFIG
 from .HeteroGraph import HeteroGraph
 from data.reader import load_tox21
 from utils.sample import sample
-from net.models import DynamicGraphEncoder, MLP, AMPNN
+from utils.MatrixCache import MatrixCache
+from net.models import MLP, AMPNN
 from visualize.regress import plt_multiple_scatter
 
 TOX21_GRAPH_PATH = 'graphs/TOX21/'
@@ -26,8 +26,14 @@ def set_seed(seed: int, use_cuda: bool):
         torch.cuda.manual_seed(seed)
 
 
-def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tqdm=True, use_model='HamGN',
-                dataset='TOX21'):
+def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tqdm=True,
+                force_save=False, special_config: dict = None,
+                position_encoder_path: str = 'net/pe.pt', dataset='TOX21'):
+    cfg = DEFAULT_CONFIG.copy()
+    if special_config:
+        cfg.update(special_config)
+    for k, v in cfg.items():
+        print(k, ':', v)
     set_seed(seed, use_cuda)
     np.set_printoptions(precision=4, suppress=True, linewidth=140)
 
@@ -43,7 +49,6 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
     not_nan_mask = not_nan.astype(np.int)
     not_nan = torch.tensor(not_nan, dtype=torch.float32)
     properties = torch.tensor(properties, dtype=torch.float32)
-    # print(properties)
     if use_cuda:
         not_nan = not_nan.cuda()
         properties = properties.cuda()
@@ -52,56 +57,41 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
     e_dim = molecules[0].e_dim
     node_num = len(molecules)
 
-    train_mask, validate_mask, test_mask = sample(list(range(node_num)), TRAIN_PER, VALIDATE_PER, TEST_PER)
-    n_seg = int(len(train_mask) / (BATCH + 1))
+    train_mask, validate_mask, test_mask = sample(list(range(node_num)),
+                                                  cfg['TRAIN_PER'],
+                                                  cfg['VALIDATE_PER'],
+                                                  cfg['TEST_PER'])
+    n_seg = int(len(train_mask) / (cfg['BATCH'] + 1))
     train_mask_list = [train_mask[i::n_seg] for i in range(n_seg)]
-    n_seg = int(len(validate_mask) / (BATCH + 1))
+    n_seg = int(len(validate_mask) / (cfg['BATCH'] + 1))
     validate_mask_list = [validate_mask[i::n_seg] for i in range(n_seg)]
-    n_seg = int(len(test_mask) / (BATCH + 1))
+    n_seg = int(len(test_mask) / (cfg['BATCH'] + 1))
     test_mask_list = [test_mask[i::n_seg] for i in range(n_seg)]
     print(train_mask, validate_mask, test_mask)
     print(len(train_mask_list), len(validate_mask_list), len(test_mask_list))
 
-    if use_model == 'HamGN':
-        model = DynamicGraphEncoder(v_dim=n_dim,
-                                    e_dim=e_dim,
-                                    p_dim=P_DIM,
-                                    q_dim=Q_DIM,
-                                    f_dim=F_DIM,
-                                    layers=HamGN_LAYERS,
-                                    hamilton=True,
-                                    discrete=True,
-                                    gamma=GAMMA,
-                                    tau=TAU,
-                                    dropout=DROPOUT,
-                                    use_cuda=use_cuda)
-    elif use_model == 'AMPNN':
-        model = AMPNN(n_dim=n_dim,
-                      e_dim=e_dim,
-                      h_dim=F_DIM,
-                      c_dims=C_DIMS,
-                      he_dim=HE_DIM,
-                      layers=AMPNN_LAYERS,
-                      residual=False,
-                      use_cuda=use_cuda,
-                      dropout=DROPOUT)
+    if position_encoder_path and os.path.exists(position_encoder_path):
+        position_encoder = torch.load(position_encoder_path)
+        position_encoder.eval()
     else:
-        assert False, 'Undefined model: {}!'.format(use_model)
-    classifier = MLP(F_DIM, MLP_HIDDEN, n_label, dropout=DROPOUT, activation='sigmoid')
+        print('NO POSITION ENCODER IS BEING USED!!!')
+        position_encoder = None
+    model = AMPNN(n_dim=n_dim,
+                  e_dim=e_dim,
+                  config=cfg,
+                  position_encoder=position_encoder,
+                  use_cuda=use_cuda)
+    classifier = MLP(cfg['F_DIM'], n_label, h_dims=cfg['MLP_DIMS'], dropout=cfg['DROPOUT'], activation='sigmoid')
     if use_cuda:
         model.cuda()
         classifier.cuda()
     params = list(chain(model.parameters(), classifier.parameters()))
     for param in params:
         print(param.shape)
-    optimizer = optim.Adam(params, lr=LR, weight_decay=DECAY)
-    loss_fuc = MSELoss()
-
-    matrix_mask_dicts = {}
-    s_losses = []
-    c_losses = []
-    a_losses = []
-    u_losses = []
+    optimizer = optim.Adam(params, lr=cfg['LR'], weight_decay=cfg['DECAY'])
+    current_lr = cfg['LR']
+    matrix_cache = MatrixCache(cfg['MAX_DICT'])
+    loss_fuc = BCELoss()
 
     def forward(mask: list, name=None) -> (torch.Tensor, torch.Tensor, torch.Tensor):
         nfs = torch.cat([molecules[i].node_features for i in mask])
@@ -109,53 +99,12 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
         if use_cuda:
             nfs = nfs.cuda()
             efs = efs.cuda()
-        ms = []
-        us = []
-        vs = []
-        em = []
-        ptr = 0
-        for i, m in enumerate(mask):
-            nn = molecules[m].node_features.shape[0]
-            ms.extend([i] * nn)
-            for u in molecules[m].us:
-                us.append(u + ptr)
-            for v in molecules[m].vs:
-                vs.append(v + ptr)
-            em.extend(molecules[m].edge_mask)
-            ptr += nn
 
-        if name and name in matrix_mask_dicts.keys():
-            mm_tuple = matrix_mask_dicts[name]
-        else:
-            n_node = nfs.shape[0]
-            mol_node_matrix, mol_node_mask = \
-                AMPNN.produce_node_edge_matrix(max(ms) + 1, ms, ms, [1] * len(ms))
-            node_edge_matrix_global, node_edge_mask_global = \
-                AMPNN.produce_node_edge_matrix(n_node, us, vs, [1] * len(us))
-            if use_cuda:
-                mol_node_matrix = mol_node_matrix.cuda()
-                mol_node_mask = mol_node_mask.cuda()
-                node_edge_matrix_global = node_edge_matrix_global.cuda()
-                node_edge_mask_global = node_edge_mask_global.cuda()
-            mm_tuple = (mol_node_matrix, mol_node_mask,
-                        node_edge_matrix_global, node_edge_mask_global,
-                        )
-            if name and len(matrix_mask_dicts.keys()) < MAX_DICT:
-                matrix_mask_dicts[name] = mm_tuple
+        us, vs, mm_tuple = matrix_cache.fetch(molecules, mask, nfs, name, use_cuda)
 
-        if use_model == 'HamGN':
-            embeddings, s_loss, c_loss, a_loss = model(nfs, efs, us, vs, mm_tuple)
-            s_losses.append(s_loss.cpu().item())
-            c_losses.append(c_loss.cpu().item())
-            a_losses.append(a_loss.cpu().item())
-            std_loss = GAMMA_S * s_loss + GAMMA_C * c_loss + GAMMA_A * a_loss
-        elif use_model == 'AMPNN':
-            embeddings, _ = model(nfs, efs, us, vs, mm_tuple, GLOBAL_MASK)
-            std_loss = 0
-        else:
-            assert False
+        embeddings, _ = model(nfs, efs, us, vs, mm_tuple)
+        std_loss = 0
         logits = classifier(embeddings) * not_nan[mask, :]
-        # print(logits.cpu())
         target = properties[mask, :]
         if use_cuda:
             target = target.cuda()
@@ -164,11 +113,7 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
     def train(mask_list: list, name=None):
         model.train()
         classifier.train()
-
-        s_losses.clear()
-        c_losses.clear()
-        a_losses.clear()
-        u_losses.clear()
+        u_losses = []
 
         t = enumerate(mask_list)
         if use_tqdm:
@@ -185,11 +130,9 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
             loss = u_loss + std_loss
             loss.backward()
             optimizer.step()
+            nonlocal current_lr
+            current_lr *= 1 - cfg['DECAY']
 
-        if use_model == 'HamGN':
-            print('\t\tStationary loss: {:.4f}'.format(np.average(s_losses)))
-            print('\t\tCentrality loss: {:.4f}'.format(np.average(c_losses)))
-            print('\t\tAffinity loss: {:.4f}'.format(np.average(a_losses)))
         print('\t\tSemi-supervised loss: {:.4f}'.format(np.average(u_losses)))
 
     def calc_masked_roc(logits, target, mask) -> float:
@@ -197,9 +140,9 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
         for i in range(n_label):
             l = logits[:, i]
             t = target[:, i]
-            nnm = not_nan_mask[mask, i]
-            l = l[nnm == 1]
-            t = t[nnm == 1]
+            # nnm = not_nan_mask[mask, i]
+            # l = l[nnm == 1]
+            # t = t[nnm == 1]
             rocs.append(roc_auc_score(t, l))
             # print(l.shape)
         # print(rocs)
@@ -235,8 +178,9 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
         print('\t\tLoss: {:.3f}'.format(np.average(losses)))
         print('\t\tROC: {:.3f}'.format(calc_masked_roc(all_logits, all_target, mask)))
 
-    for epoch in range(ITERATION):
+    for epoch in range(cfg['ITERATION']):
         print('In iteration {}:'.format(epoch + 1))
+        print('\tLearning rate: {:.8e}'.format(current_lr))
         print('\tTraining: ')
         train(train_mask_list, name='train')
         print('\tEvaluating training: ')

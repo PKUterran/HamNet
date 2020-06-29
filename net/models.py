@@ -2,77 +2,65 @@ import numpy as np
 import time
 import torch
 import torch.nn.functional as F
-from torch.nn import Parameter, Module, Linear, ReLU, Dropout
+from torch.nn import Module, Linear, ReLU, Dropout
 from itertools import chain
 from functools import reduce
+from numpy.linalg import norm
 
-from .config import *
-from .layers import ConcatMesPassing, GRUAggregation, AttentivePooling, DirectDerivation, HamiltonianDerivation, \
-    GraphConvolutionLayer
+from .layers import ConcatMesPassing, GRUAggregation, AttentivePooling, HamiltonianDerivation, LstmPQEncoder
+from visualize.trajectory import plt_trajectory
+from utils.func import re_index
 
 
 class AMPNN(Module):
-    def __init__(self, n_dim: int, e_dim: int, h_dim: int, c_dims: list, he_dim: int, layers: int,
-                 residual=True, use_cuda=False, dropout=0.):
+    def __init__(self, n_dim: int, e_dim: int, config, position_encoder=None, use_cuda=False):
         super(AMPNN, self).__init__()
-        assert len(c_dims) == layers, '{}, {}'.format(c_dims, layers)
+        self.h_dim = config['F_DIM']
+        self.c_dims = config['C_DIMS']
+        self.he_dim = config['HE_DIM']
+        self.layers = len(config['C_DIMS'])
+        self.dropout = config['DROPOUT']
+        self.residual = False
+        self.position_encoder = position_encoder
+        self.use_cuda = use_cuda
 
-        ### DEBUG MODE ###
-        self.total_forward_time = 0.
-        self.layer_forward_time = [[0., 0., 0., 0.] for _ in range(layers)]
-        ### ---------- ###
-
-        in_dims = [h_dim] * (layers + 1)
-        if residual:
-            for i in range(1, layers + 1):
+        in_dims = [self.h_dim] * (self.layers + 1)
+        if self.residual:
+            for i in range(1, self.layers + 1):
                 in_dims[i] += in_dims[i - 1]
         self.e_dim = e_dim
-        self.FC_N = Linear(n_dim, h_dim, bias=True)
-        self.FC_E = Linear(e_dim, he_dim, bias=True)
-        self.Ms = [ConcatMesPassing(in_dims[i], he_dim, c_dims[i], dropout=dropout) for i in range(layers)]
-        # self.Us = [DirectAggregation() for _ in range(layers)]
-        self.Us = [GRUAggregation(c_dims[i], in_dims[i]) for i in range(layers)]
-        self.R = AttentivePooling(in_dims[-1], in_dims[-1], use_cuda, dropout=dropout)
-        # self.R = MapPooling(in_dims[-1], int(head_num * in_dims[-1]))
-        self.layers = layers
-        self.residual = residual
-        self.use_cuda = use_cuda
+        self.FC_N = Linear(n_dim + config['POS_DIM'] if self.position_encoder else n_dim, self.h_dim, bias=True)
+        self.FC_E = Linear(e_dim, self.he_dim, bias=True)
+        self.Ms = [ConcatMesPassing(in_dims[i], self.he_dim, self.c_dims[i], dropout=self.dropout)
+                   for i in range(self.layers)]
+        self.Us = [GRUAggregation(self.c_dims[i], in_dims[i]) for i in range(self.layers)]
+        self.R = AttentivePooling(in_dims[-1], in_dims[-1], use_cuda, dropout=self.dropout)
         for i, p in enumerate(self.get_inner_parameters()):
             self.register_parameter('param_' + str(i), p)
 
     def forward(self, node_features: torch.Tensor, edge_features: torch.Tensor, us: list, vs: list,
-                matrix_mask_tuple: tuple, global_mask: list) -> (torch.Tensor, torch.Tensor):
+                matrix_mask_tuple: tuple) -> (torch.Tensor, torch.Tensor):
         assert edge_features.shape[0] == len(us) and edge_features.shape[0] == len(vs), \
             '{}, {}, {}.'.format(edge_features.shape, len(us), len(vs))
-        t0 = time.time()  ### DEBUG
         if edge_features.shape[0] == 0:
             edge_features = edge_features.reshape([0, self.e_dim])
+        if self.position_encoder:
+            pos_features = self.position_encoder.transform(node_features, edge_features, us, vs, matrix_mask_tuple)[0]
+            pos_features = pos_features.detach()
+            node_features = torch.cat([node_features, pos_features], dim=1)
         node_features = F.leaky_relu(self.FC_N(node_features))
         edge_features = F.leaky_relu(self.FC_E(edge_features))
         layer_node_features = [node_features]
         layer_edge_features = [edge_features]
         mol_node_matrix, mol_node_mask = matrix_mask_tuple[0], matrix_mask_tuple[1]
         node_edge_matrix, node_edge_mask = matrix_mask_tuple[2], matrix_mask_tuple[3]
-        # node_edge_matrix_global, node_edge_mask_global = matrix_mask_tuple[2], matrix_mask_tuple[3]
-        # node_edge_matrix_local, node_edge_mask_local = matrix_mask_tuple[4], matrix_mask_tuple[5]
         for i in range(self.layers):
-            t1 = time.time()  ### DEBUG
             u_features = layer_node_features[-1][us]
             v_features = layer_node_features[-1][vs]
-            # node_edge_matrix = node_edge_matrix_global if global_mask[i] else node_edge_matrix_local
-            # node_edge_mask = node_edge_mask_global if global_mask[i] else node_edge_mask_local
-            self.layer_forward_time[i][0] += time.time() - t1  ### DEBUG
-
-            t1 = time.time()  ### DEBUG
             context_features, new_edge_features = self.Ms[i](u_features, v_features, layer_edge_features[-1],
                                                              node_edge_matrix, node_edge_mask)
-            self.layer_forward_time[i][1] += time.time() - t1  ### DEBUG
-
-            t1 = time.time()  ### DEBUG
             new_node_features = self.Us[i](layer_node_features[-1], context_features)
-            self.layer_forward_time[i][2] += time.time() - t1  ### DEBUG
 
-            t1 = time.time()  ### DEBUG
             if i != self.layers - 1:
                 new_node_features = F.relu(new_node_features)
             if self.residual:
@@ -81,10 +69,8 @@ class AMPNN(Module):
             else:
                 layer_node_features.append(new_node_features)
             layer_edge_features.append(new_edge_features)
-            self.layer_forward_time[i][3] += time.time() - t1  ### DEBUG
 
         readout, a = self.R(layer_node_features[-1], mol_node_matrix, mol_node_mask)
-        self.total_forward_time += time.time() - t0  ### DEBUG
         return readout, a
 
     def get_inner_parameters(self):
@@ -108,25 +94,20 @@ class AMPNN(Module):
         return mat, mask
 
 
-class DynamicGraphEncoder(Module):
-    def __init__(self, v_dim, e_dim, p_dim, q_dim, f_dim, layers, hamilton=False, discrete=True, tau=0.2, gamma=1,
-                 dropout=0., use_cuda=True):
-        super(DynamicGraphEncoder, self).__init__()
-        self.layers = layers
-        self.hamilton = hamilton
-        self.discrete = discrete
-        self.tau = tau
-        self.gamma = gamma
+class PositionEncoder(Module):
+    def __init__(self, n_dim, e_dim, config, use_cuda=True):
+        super(PositionEncoder, self).__init__()
+        self.p_dim = config['PQ_DIM']
+        self.q_dim = config['PQ_DIM']
+        self.layers = config['HGN_LAYERS']
+        self.tau = config['TAU']
+        self.dropout = config['DROPOUT']
         self.use_cuda = use_cuda
 
-        self.e_encoder = Linear(v_dim + e_dim + v_dim, 1)
-        self.p_encoder = GraphConvolutionLayer(v_dim, p_dim, activation=torch.tanh)
-        self.q_encoder = GraphConvolutionLayer(v_dim, q_dim, activation=torch.tanh)
-        if hamilton:
-            self.derivation = HamiltonianDerivation(p_dim, q_dim, dropout=dropout)
-        else:
-            self.derivation = DirectDerivation(p_dim, q_dim)
-        self.readout = AttentivePooling(v_dim + p_dim + q_dim, f_dim, use_cuda=use_cuda, dropout=dropout)
+        self.e_encoder = Linear(n_dim + e_dim + n_dim, 1)
+        self.pq_encoder = LstmPQEncoder(n_dim, self.p_dim)
+        self.derivation = HamiltonianDerivation(self.p_dim, self.q_dim, dropout=0.0)
+        self.dn23 = Linear(self.q_dim, 3)
 
     def forward(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list, matrix_mask_tuple: tuple):
         mol_node_matrix, mol_node_mask = matrix_mask_tuple[0], matrix_mask_tuple[1]
@@ -135,61 +116,108 @@ class DynamicGraphEncoder(Module):
         u_e_v_features = torch.cat([v_features[us], e_features, v_features[vs]], dim=1)
         e_weight = torch.diag(torch.sigmoid(self.e_encoder(u_e_v_features)).view([-1]))
         e = node_edge_matrix @ e_weight @ node_edge_matrix.t()
-        # print(e.cpu())
-        e_ = node_edge_matrix @ node_edge_matrix.t()
-        # print(e_.cpu())
-        if self.use_cuda:
-            e_noi = e_ - torch.eye(e_.shape[0]).cuda() * e_
-        else:
-            e_noi = e_ - torch.eye(e_.shape[0]) * e_
 
-        ps = [self.p_encoder(v_features, e)]
-        qs = [self.q_encoder(v_features, e)]
-        c_losses = [(mol_node_matrix @ qs[0]).norm()]
+        p0, q0 = self.pq_encoder(v_features, mol_node_matrix, e)
+        ps = [p0]
+        qs = [q0]
+        s_losses = []
+        c_losses = []
 
         for i in range(self.layers):
-            dp, dq = self.derivation(ps[i], qs[i], e)
-            if self.discrete:
-                ps.append(ps[i] + self.tau * dp)
-                qs.append(qs[i] + self.tau * dq)
-            else:
-                raise NotImplementedError()
-            c_losses.append((mol_node_matrix @ qs[i + 1]).norm())
+            dp, dq, _ = self.derivation(ps[i], qs[i], e)
+            ps.append(ps[i] + self.tau * dp)
+            qs.append(qs[i] + self.tau * dq)
 
-        f, _ = self.readout(torch.cat([v_features, ps[-1], qs[-1]], dim=1), mol_node_matrix, mol_node_mask)
+            s_losses.append((dq - ps[i]).norm())
+            c_losses.append((mol_node_matrix @ (ps[i + 1] - ps[i])).norm())
 
-        s_loss = torch.abs(ps[-1]).sum()
+        s_loss = sum(s_losses)
         c_loss = sum(c_losses)
-        dis = (qs[-1].unsqueeze(0) - qs[-1].unsqueeze(1)).norm(dim=2)
-        # if np.random.randint(0, 100) == 0:
-        #     print(dis.cpu().detach().numpy())
-        #     print(e_noi)
-        #     print((e_noi * F.relu(dis - self.gamma)).cpu().detach().numpy())
-        a_loss = (e_noi * (dis - self.gamma) ** 2).sum()
+        # self.verbose_print(ps, qs, mol_node_matrix, node_edge_matrix, us, vs, verbose)
 
-        return f, s_loss, c_loss, a_loss
+        return ps[-1], qs[-1], s_loss, c_loss
+
+    def fit(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list,
+            matrix_mask_tuple: tuple, fit_pos: torch.Tensor, print_mode=False):
+        _, q, s_loss, c_loss = self(v_features, e_features, us, vs, matrix_mask_tuple)
+        pos = self.dn23(q)
+        mol_node_matrix = matrix_mask_tuple[0]
+        norm_mnm = mol_node_matrix / mol_node_matrix.sum(dim=1).unsqueeze(-1)
+        dis_mask = norm_mnm.t() @ norm_mnm
+        dis = (pos.unsqueeze(0) - pos.unsqueeze(1)).norm(dim=2)
+        fit_dis = (fit_pos.unsqueeze(0) - fit_pos.unsqueeze(1)).norm(dim=2)
+        d_loss = ((dis - fit_dis) * dis_mask).pow(2).sum() / mol_node_matrix.shape[0]
+        if print_mode:
+            print(dis_mask.cpu().detach().numpy()[:8, :8])
+            print(dis.cpu().detach().numpy()[:8, :8])
+            print(fit_dis.cpu().detach().numpy()[:8, :8])
+        return d_loss, s_loss, c_loss
+
+    def transform(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list,
+                  matrix_mask_tuple: tuple):
+        p, q, s_loss, c_loss = self(v_features, e_features, us, vs, matrix_mask_tuple)
+        return torch.cat([p, q], dim=1), s_loss, c_loss
+
+    def verbose_print(self, ps, qs, mnm, nem, us, vs, verbose):
+        if self.use_cuda:
+            ps = [p.cpu() for p in ps]
+            qs = [q.cpu() for q in qs]
+            mnm = mnm.cpu()
+            nem = nem.cpu()
+        ps = [p.detach().numpy() for p in ps]
+        qs = [q.detach().numpy() for q in qs]
+        mnm = mnm.detach().numpy()
+        nem = nem.detach().numpy()
+        us = np.array(us)
+        vs = np.array(vs)
+        for m in verbose:
+            print('\t\t\tIn mol {}:'.format(m))
+            one_hot = np.zeros(shape=[1, mnm.shape[0]], dtype=np.int)
+            one_hot[0, m] = 1
+            node_mask = one_hot @ mnm
+            q = qs[-1][node_mask[0, :] > 0, :]
+            distances = norm(np.expand_dims(q, 0) - np.expand_dims(q, 1), axis=2)
+            print('{}'.format(distances))
+            print('\t\t\t\tAverage distance: {}'.format(np.average(distances) * (1 + 1.0 / (node_mask.sum() - 1))))
+
+            edge_mask = node_mask @ nem
+            us_ = re_index(us[edge_mask[0, :] > 0], node_mask[0, :])
+            vs_ = re_index(vs[edge_mask[0, :] > 0], node_mask[0, :])
+            for u, v in zip(us_, vs_):
+                d = norm(qs[-1][u, :] - qs[-1][v, :])
+                print('\t\t\t\tBetween {} and {}, distance is {}'.format(u, v, d))
+            plt_trajectory([q[node_mask[0, :] > 0, :] for q in qs], us_, vs_, name=str(int(time.time() * 1000)))
 
 
 class MLP(Module):
-    def __init__(self, i_dim: int, h_dim: int, o_dim: int, dropout=0., activation=None):
+    def __init__(self, i_dim: int, o_dim: int, h_dims: list = list(), dropout=0., activation=None):
         super(MLP, self).__init__()
 
-        # self.linear1 = Linear(i_dim, h_dim, bias=False)
-        # self.act = ReLU()
-        # self.linear2 = Linear(h_dim, o_dim, bias=True)
+        in_dims = [i_dim] + h_dims
+        out_dims = h_dims + [o_dim]
+        self.linears = [Linear(in_dim, out_dim, bias=True) for in_dim, out_dim in zip(in_dims, out_dims)]
+        for i, linear in enumerate(self.linears):
+            self.register_parameter('{}_weight_{}'.format('MLP', i), linear.weight)
+            self.register_parameter('{}_bias_{}'.format('MLP', i), linear.bias)
 
-        self.linear1 = Linear(i_dim, o_dim, bias=True)
-
+        self.relu = ReLU()
         self.dropout = Dropout(p=dropout)
         self.activation = activation
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        # return self.linear2(self.act(self.linear1(self.dropout(inputs))))
-        h = self.linear1(self.dropout(inputs))
+        h = self.dropout(inputs)
+        for i, linear in enumerate(self.linears):
+            h = linear(h)
+            if i < len(self.linears) - 1:
+                h = self.relu(h)
         if self.activation == 'sigmoid':
             h = torch.sigmoid(h)
         elif self.activation == 'softmax':
             h = torch.softmax(h, dim=1)
+        elif not self.activation:
+            pass
+        else:
+            assert False, 'Undefined activation: {}.'.format(self.activation)
         return h
 
 

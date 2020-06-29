@@ -9,11 +9,11 @@ from itertools import chain
 from tqdm import tqdm
 from sklearn.metrics import roc_auc_score
 
-from .config import *
+from .config import BBBPConfig, HIVConfig
 from .HeteroGraph import HeteroGraph
 from data.reader import load_hiv, load_bbbp
 from utils.sample import sample
-from net.models import DynamicGraphEncoder, MLP, AMPNN
+from net.models import MLP, AMPNN
 from visualize.regress import plt_multiple_scatter
 
 HIV_GRAPH_PATH = 'graphs/HIV/'
@@ -35,9 +35,11 @@ def train_hiv(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
     if dataset == 'HIV':
         smiles, info_list, properties = load_hiv(limit)
         graph_path = HIV_GRAPH_PATH
+        default_config = HIVConfig
     elif dataset == 'BBBP':
         smiles, info_list, properties = load_bbbp(limit)
         graph_path = BBBP_GRAPH_PATH
+        default_config = BBBPConfig
     else:
         assert False, "Unknown dataset: {}.".format(dataset)
     n_label = properties.max() + 1
@@ -49,52 +51,43 @@ def train_hiv(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
     e_dim = molecules[0].e_dim
     node_num = len(molecules)
 
-    train_mask, validate_mask, test_mask = sample(list(range(node_num)), TRAIN_PER, VALIDATE_PER, TEST_PER)
-    n_seg = int(len(train_mask) / (BATCH + 1))
+    train_mask, validate_mask, test_mask = sample(list(range(node_num)),
+                                                  default_config.TRAIN_PER,
+                                                  default_config.VALIDATE_PER,
+                                                  default_config.TEST_PER)
+    n_seg = int(len(train_mask) / (default_config.BATCH + 1))
     train_mask_list = [train_mask[i::n_seg] for i in range(n_seg)]
-    n_seg = int(len(validate_mask) / (BATCH + 1))
+    n_seg = int(len(validate_mask) / (default_config.BATCH + 1))
     validate_mask_list = [validate_mask[i::n_seg] for i in range(n_seg)]
-    n_seg = int(len(test_mask) / (BATCH + 1))
+    n_seg = int(len(test_mask) / (default_config.BATCH + 1))
     test_mask_list = [test_mask[i::n_seg] for i in range(n_seg)]
     print(train_mask, validate_mask, test_mask)
     print(len(train_mask_list), len(validate_mask_list), len(test_mask_list))
 
     if use_model == 'HamGN':
-        model = DynamicGraphEncoder(v_dim=n_dim,
+        model = DynamicGraphEncoder(n_dim=n_dim,
                                     e_dim=e_dim,
-                                    p_dim=P_DIM,
-                                    q_dim=Q_DIM,
-                                    f_dim=F_DIM,
-                                    layers=HamGN_LAYERS,
-                                    hamilton=True,
-                                    discrete=True,
-                                    gamma=GAMMA,
-                                    tau=TAU,
-                                    dropout=DROPOUT,
+                                    default_config=default_config,
                                     use_cuda=use_cuda)
     elif use_model == 'AMPNN':
         model = AMPNN(n_dim=n_dim,
                       e_dim=e_dim,
-                      h_dim=F_DIM,
-                      c_dims=C_DIMS,
-                      he_dim=HE_DIM,
-                      layers=AMPNN_LAYERS,
-                      residual=False,
-                      use_cuda=use_cuda,
-                      dropout=DROPOUT)
+                      default_config=default_config,
+                      use_cuda=use_cuda)
     else:
         assert False, 'Undefined model: {}!'.format(use_model)
-    classifier = MLP(F_DIM, MLP_HIDDEN, n_label, dropout=DROPOUT, activation='softmax')
+    classifier = MLP(default_config.F_DIM, n_label, h_dims=default_config.H_DIMS, dropout=default_config.DROPOUT,
+                     activation='softmax')
     if use_cuda:
         model.cuda()
         classifier.cuda()
     params = list(chain(model.parameters(), classifier.parameters()))
     for param in params:
         print(param.shape)
-    optimizer = optim.Adam(params, lr=LR, weight_decay=DECAY)
+    optimizer = optim.Adam(params, lr=default_config.LR, weight_decay=default_config.DECAY)
+    current_lr = default_config.LR
     loss_fuc = CrossEntropyLoss()
     # forward_time = 0.
-    bp_time = 0.
     matrix_mask_dicts = {}
     s_losses = []
     c_losses = []
@@ -138,7 +131,7 @@ def train_hiv(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
             mm_tuple = (mol_node_matrix, mol_node_mask,
                         node_edge_matrix_global, node_edge_mask_global,
                         )
-            if name and len(matrix_mask_dicts.keys()) < MAX_DICT:
+            if name and len(matrix_mask_dicts.keys()) < default_config.MAX_DICT:
                 matrix_mask_dicts[name] = mm_tuple
 
         if use_model == 'HamGN':
@@ -148,9 +141,11 @@ def train_hiv(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
             s_losses.append(s_loss.cpu().item())
             c_losses.append(c_loss.cpu().item())
             a_losses.append(a_loss.cpu().item())
-            std_loss = GAMMA_S * s_loss + GAMMA_C * c_loss + GAMMA_A * a_loss
+            std_loss = default_config.GAMMA_S * s_loss + \
+                       default_config.GAMMA_C * c_loss + \
+                       default_config.GAMMA_A * a_loss
         elif use_model == 'AMPNN':
-            embeddings, _ = model(nfs, efs, us, vs, mm_tuple, GLOBAL_MASK)
+            embeddings, _ = model(nfs, efs, us, vs, mm_tuple)
             std_loss = 0
         else:
             assert False
@@ -185,6 +180,8 @@ def train_hiv(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
             loss = u_loss + std_loss
             loss.backward()
             optimizer.step()
+            nonlocal current_lr
+            current_lr *= 1 - default_config.DECAY
 
         if use_model == 'HamGN':
             print('\t\tStationary loss: {:.4f}'.format(np.average(s_losses)))
@@ -231,8 +228,9 @@ def train_hiv(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
             for i, d in zip(worst_ids, worst_ds):
                 print('\t\t\t{}: {}'.format(smiles[i], d))
 
-    for epoch in range(ITERATION):
+    for epoch in range(default_config.ITERATION):
         print('In iteration {}:'.format(epoch + 1))
+        print('\tLearning rate: {:.8e}'.format(current_lr))
         print('\tTraining: ')
         train(train_mask_list, name='train')
         print('\tEvaluating training: ')

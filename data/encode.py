@@ -102,22 +102,39 @@ def num_bond_features():
     return len(bond_features(simple_mol.GetBonds()[0]))
 
 
-def encode_smiles(smiles: np.ndarray, return_mask=False, max_position=0):
+def encode_smiles(smiles: np.ndarray, return_mask=False,
+                  mol_atom_pos: list = None,
+                  max_position=0, central_atoms=0, max_dis=0):
     ret = []
     mask = []
+    similar = 0
     print('Start encoding...')
     cnt = 0
-    for smile in smiles:
+    for idx, smile in enumerate(smiles):
         info = {}
         mol = Chem.MolFromSmiles(smile)
+        atom_pos = mol_atom_pos[idx] if mol_atom_pos else None
         if return_mask:
             if not mol:
                 cnt += 1
                 continue
             else:
                 mask.append(cnt)
-        info['nf'] = np.stack([atom_features(a, position=i, max_position=max_position)
-                               for i, a in enumerate(mol.GetAtoms())])
+        if central_atoms * max_dis:
+            cad, sim = get_central_atoms_dis(mol, central_atoms, max_dis)
+            similar += sim
+            info['nf'] = np.concatenate([np.stack([atom_features(a, position=i, max_position=max_position)
+                                                   for i, a in enumerate(mol.GetAtoms())]),
+                                         cad], axis=1)
+        else:
+            info['nf'] = np.stack([atom_features(a, position=i, max_position=max_position)
+                                   for i, a in enumerate(mol.GetAtoms())])
+        if mol_atom_pos:
+            # print(idx)
+            # print(info['nf'])
+            # print(atom_pos)
+            info['nf'] = np.concatenate([info['nf'], atom_pos], axis=1)
+
         info['ef'] = np.stack([bond_features(b) for b in mol.GetBonds()]
                               # + [bond_features(b) for b in mol.GetBonds()]
                               ) if len(mol.GetBonds()) else np.zeros(shape=[0, 10], dtype=np.int)
@@ -143,6 +160,61 @@ def encode_smiles(smiles: np.ndarray, return_mask=False, max_position=0):
         if cnt % 10000 == 0:
             print(cnt, 'encoded.')
     print('Encoded:', len(ret))
+    print('Similarity:', similar / len(smiles))
     if return_mask:
         return ret, mask
     return ret
+
+
+def get_central_atoms_dis(mol, atoms_num, max_dis) -> (np.ndarray, int):
+    n = len(mol.GetAtoms())
+    distance_matrix = np.array(Chem.GetDistanceMatrix(mol), dtype=np.int)
+    distance_matrix[distance_matrix > max_dis] = max_dis
+    if n <= atoms_num:
+        central_idx = np.array([i % n for i in range(atoms_num)], dtype=np.int)
+        central_atoms_dis = distance_matrix[:, central_idx]
+        num_similar = 0
+    else:
+        # print(distance_matrix)
+        different = [(distance_matrix[:, i: i + 1] != distance_matrix[i: i + 1, :]).astype(np.int) for i in range(n)]
+        # print(different[0])
+        # print(different[1])
+        specialty = [np.sum(d) for d in different]
+        # print(specialty)
+        total = sum(different)
+        central_alive = np.array([1] * n, dtype=np.int)
+        # print(central_alive)
+        order = np.argsort(specialty)
+        # print(order)
+
+        temp_dif = total
+        while sum(central_alive) > atoms_num:
+            flag = False  # if remove an atom
+            for o in order:
+                # print((((total - different[o]) == 0) == (np.eye(n) == 1)).sum() == n * n)
+                if (((temp_dif - different[o]) == 0) == (np.eye(n) == 1)).sum() == n * n:
+                    central_alive[o] = 0
+                    temp_dif -= different[o]
+                    flag = True
+                    break
+            if flag:
+                continue
+
+            for o in order:
+                if central_alive[o]:
+                    central_alive[o] = 0
+                    temp_dif -= different[o]
+                    if sum(central_alive) == atoms_num:
+                        break
+            break
+
+        # print(temp_dif)
+        num_similar = np.logical_and((temp_dif == 0), (np.eye(n) == 0)).sum() / 2
+        central_atoms_dis = distance_matrix[:, central_alive == 1]
+    # print(central_atoms_dis)
+    # print(central_atoms_dis.shape)
+    central_atoms_dis = np.eye(max_dis + 1)[central_atoms_dis]
+    # print(central_atoms_dis)
+    central_atoms_dis = np.reshape(central_atoms_dis, newshape=[n, atoms_num * (max_dis + 1)])
+    # print(central_atoms_dis)
+    return central_atoms_dis, num_similar
