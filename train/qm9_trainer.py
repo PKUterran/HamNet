@@ -3,6 +3,7 @@ import torch
 import torch.optim as optim
 import gc
 import os
+import json
 from torch.nn import MSELoss
 from itertools import chain
 from statsmodels import robust
@@ -17,6 +18,7 @@ from net.models import MLP, AMPNN
 from visualize.regress import plt_multiple_scatter
 
 GRAPH_PATH = 'graphs/QM9/'
+LOG_PATH = 'logs/QM9/'
 
 
 def set_seed(seed: int, use_cuda: bool):
@@ -28,7 +30,7 @@ def set_seed(seed: int, use_cuda: bool):
 
 def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tqdm=True, use_pos=False,
               prop=list(range(12)), force_save=False, special_config: dict = None,
-              position_encoder_path: str = 'net/pe.pt'):
+              position_encoder_path: str = 'net/pe.pt', tag='std'):
     cfg = DEFAULT_CONFIG.copy()
     if special_config:
         cfg.update(special_config)
@@ -89,6 +91,7 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
     current_lr = cfg['LR']
     matrix_cache = MatrixCache(cfg['MAX_DICT'])
     loss_fuc = MSELoss()
+    logs = []
 
     def forward(mask: list, name=None) -> (torch.Tensor, torch.Tensor, torch.Tensor):
         nfs = torch.cat([molecules[i].node_features for i in mask])
@@ -137,7 +140,9 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
             nonlocal current_lr
             current_lr *= 1 - cfg['DECAY']
 
-        print('\t\tSemi-supervised loss: {:.4f}'.format(np.average(u_losses)))
+        u_loss = np.average(u_losses)
+        print('\t\tSemi-supervised loss: {:.4f}'.format(u_loss))
+        logs[-1].update({'on_train_loss': u_loss})
 
     def evaluate(mask_list: list, name=None, visualize=None):
         model.eval()
@@ -166,9 +171,12 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
                 logits_list.append(logits.cpu().detach().numpy())
                 target_list.append(target.cpu().detach().numpy())
 
-        print('\t\tLoss: {:.3f}'.format(np.average(losses)))
+        u_loss = np.average(losses)
+        print('\t\tLoss: {:.3f}'.format(u_loss))
         print('\t\tMAE: {}.'.format(np.average(maes, axis=0) * prop_std))
         print('\t\tMulti-MAE: {:.3f}.'.format(np.average(maes, axis=0).sum()))
+        logs[-1].update({'{}_loss'.format(name): u_loss})
+        logs[-1].update({'{}_metric'.format(name): np.average(maes, axis=0).sum()})
 
         if visualize:
             all_logits = np.vstack(logits_list)
@@ -183,6 +191,7 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
                 print('\t\t\t{}: {}'.format(smiles[i], d))
 
     for epoch in range(cfg['ITERATION']):
+        logs.append({'epoch': epoch + 1})
         print('In iteration {}:'.format(epoch + 1))
         print('\tLearning rate: {:.8e}'.format(current_lr))
         print('\tTraining: ')
@@ -197,3 +206,7 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
         evaluate(test_mask_list, name='test',
                  visualize='test' if epoch + 1 == cfg['ITERATION'] else None)
         gc.collect()
+
+    d = {'metric': 'Multi-MAE', 'logs': logs}
+    with open('{}{}.json'.format(LOG_PATH, tag), 'w+', encoding='utf-8') as fp:
+        json.dump(d, fp)
