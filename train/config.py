@@ -32,7 +32,7 @@ MODEL_CONFIG = {
     'LR': 1e-3,
     'DECAY': 1e-5,
     'DROPOUT': 0.5,
-    'ITERATION': 200,
+    'ITERATION': 100,
     'EVAL': 10,
     'BATCH': 32,
 
@@ -49,6 +49,8 @@ MODEL_CONFIG_QM9.update({
     'LR': 1e-4,
     'DECAY': 2e-6,
     'DROPOUT': 0.0,
+    'ITERATION': 300,
+    'EVAL': 30,
     'C_DIMS': [256, 256, 256],
     'MLP_DIMS': [],
     'MAX_DICT': 4096,
