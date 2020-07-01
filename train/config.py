@@ -21,7 +21,7 @@ FITTER_CONFIG = {
 
 FITTER_CONFIG_QM9 = FITTER_CONFIG.copy()
 FITTER_CONFIG_QM9.update({
-    'MAX_DICT': 3072,
+    'MAX_DICT': 4096,
 })
 
 MODEL_CONFIG = {
@@ -41,6 +41,7 @@ MODEL_CONFIG = {
     'C_DIMS': [128, 128, 128, 128],
     'F_DIM': 128,
     'MLP_DIMS': [256],
+    'MAX_DICT': 1024,
 }
 
 MODEL_CONFIG_QM9 = MODEL_CONFIG.copy()
@@ -50,7 +51,7 @@ MODEL_CONFIG_QM9.update({
     'DROPOUT': 0.0,
     'C_DIMS': [256, 256, 256],
     'MLP_DIMS': [],
-    'MAX_DICT': 3072,
+    'MAX_DICT': 4096,
 })
 
 MODEL_CONFIG_LIPOP = MODEL_CONFIG.copy()
@@ -58,7 +59,6 @@ MODEL_CONFIG_LIPOP.update({
     'LR': 2e-4,
     'DECAY': 5e-5,
     'BATCH': 64,
-    'MAX_DICT': 1024,
 })
 
 MODEL_CONFIG_TOX21 = MODEL_CONFIG.copy()
@@ -66,7 +66,6 @@ MODEL_CONFIG_TOX21.update({
     'LR': 2e-4,
     'DECAY': 5e-5,
     'BATCH': 64,
-    'MAX_DICT': 1024,
 })
 
 

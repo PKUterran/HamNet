@@ -97,6 +97,7 @@ class AMPNN(Module):
 class PositionEncoder(Module):
     def __init__(self, n_dim, e_dim, config, use_cuda=True):
         super(PositionEncoder, self).__init__()
+        print('construct 0')
         self.p_dim = config['PQ_DIM']
         self.q_dim = config['PQ_DIM']
         self.layers = config['HGN_LAYERS']
@@ -104,9 +105,13 @@ class PositionEncoder(Module):
         self.dropout = config['DROPOUT']
         self.use_cuda = use_cuda
 
+        print('construct 1')
         self.e_encoder = Linear(n_dim + e_dim + n_dim, 1)
+        print('construct 2')
         self.pq_encoder = LstmPQEncoder(n_dim, self.p_dim)
+        print('construct 3')
         self.derivation = HamiltonianDerivation(self.p_dim, self.q_dim, dropout=0.0)
+        print('construct 4')
         self.dn23 = Linear(self.q_dim, 3)
 
     def forward(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list, matrix_mask_tuple: tuple):
