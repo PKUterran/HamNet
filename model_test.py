@@ -10,13 +10,13 @@ from train.tox21_trainer import train_tox21
 
 fit_qm9(use_cuda=True,
         limit=-1,
-        use_tqdm=False,
+        use_tqdm=True,
         force_save=False,
         model_save_path='net/server.pt')
 
 train_qm9(use_cuda=True,
           limit=-1,
-          use_tqdm=False,
+          use_tqdm=True,
           use_pos=False,
           force_save=False,
           position_encoder_path='net/server.pt',
@@ -24,7 +24,7 @@ train_qm9(use_cuda=True,
 
 train_lipop(use_cuda=True,
             limit=-1,
-            use_tqdm=False,
+            use_tqdm=True,
             force_save=False,
             position_encoder_path='net/server.pt',
             )
