@@ -2,12 +2,12 @@ import numpy as np
 import time
 import torch
 import torch.nn.functional as F
-from torch.nn import Module, Linear, ReLU, Dropout
+from torch.nn import Module, Linear, ReLU, Dropout, ModuleList, Parameter
 from itertools import chain
 from functools import reduce
 from numpy.linalg import norm
 
-from .layers import ConcatMesPassing, GRUAggregation, AttentivePooling, HamiltonianDerivation, LstmPQEncoder
+from .layers import ConcatMesPassing, GRUAggregation, AlignAttendPooling, HamiltonianDerivation, LstmPQEncoder
 from visualize.trajectory import plt_trajectory
 from utils.func import re_index
 
@@ -19,6 +19,7 @@ class AMPNN(Module):
         self.c_dims = config['C_DIMS']
         self.he_dim = config['HE_DIM']
         self.layers = len(config['C_DIMS'])
+        self.m_radius = config['M_RADIUS']
         self.dropout = config['DROPOUT']
         self.residual = False
         self.position_encoder = position_encoder
@@ -31,53 +32,44 @@ class AMPNN(Module):
         self.e_dim = e_dim
         self.FC_N = Linear(n_dim + config['POS_DIM'] if self.position_encoder else n_dim, self.h_dim, bias=True)
         self.FC_E = Linear(e_dim, self.he_dim, bias=True)
-        self.Ms = [ConcatMesPassing(in_dims[i], self.he_dim, self.c_dims[i], dropout=self.dropout)
-                   for i in range(self.layers)]
-        self.Us = [GRUAggregation(self.c_dims[i], in_dims[i]) for i in range(self.layers)]
-        self.R = AttentivePooling(in_dims[-1], in_dims[-1], use_cuda, dropout=self.dropout)
-        for i, p in enumerate(self.get_inner_parameters()):
-            self.register_parameter('param_' + str(i), p)
+        self.Ms = ModuleList([ConcatMesPassing(in_dims[i], self.he_dim, self.c_dims[i], dropout=self.dropout)
+                              for i in range(self.layers)])
+        self.Us = ModuleList([GRUAggregation(self.c_dims[i], in_dims[i]) for i in range(self.layers)])
+        self.R = AlignAttendPooling(in_dims[-1], in_dims[-1], self.m_radius, use_cuda, dropout=self.dropout)
 
     def forward(self, node_features: torch.Tensor, edge_features: torch.Tensor, us: list, vs: list,
-                matrix_mask_tuple: tuple) -> (torch.Tensor, torch.Tensor):
+                matrix_mask_tuple: tuple, name: str = '') -> (torch.Tensor, torch.Tensor):
         assert edge_features.shape[0] == len(us) and edge_features.shape[0] == len(vs), \
             '{}, {}, {}.'.format(edge_features.shape, len(us), len(vs))
         if edge_features.shape[0] == 0:
             edge_features = edge_features.reshape([0, self.e_dim])
         if self.position_encoder:
-            pos_features = self.position_encoder.transform(node_features, edge_features, us, vs, matrix_mask_tuple)[0]
-            pos_features = pos_features.detach()
+            pos_features = self.position_encoder.transform(node_features, edge_features, us, vs,
+                                                           matrix_mask_tuple, name)[0]
+            # pos_features = pos_features.detach()
             node_features = torch.cat([node_features, pos_features], dim=1)
         node_features = F.leaky_relu(self.FC_N(node_features))
         edge_features = F.leaky_relu(self.FC_E(edge_features))
-        layer_node_features = [node_features]
-        layer_edge_features = [edge_features]
         mol_node_matrix, mol_node_mask = matrix_mask_tuple[0], matrix_mask_tuple[1]
         node_edge_matrix, node_edge_mask = matrix_mask_tuple[2], matrix_mask_tuple[3]
         for i in range(self.layers):
-            u_features = layer_node_features[-1][us]
-            v_features = layer_node_features[-1][vs]
-            context_features, new_edge_features = self.Ms[i](u_features, v_features, layer_edge_features[-1],
+            u_features = node_features[us]
+            v_features = node_features[vs]
+            context_features, new_edge_features = self.Ms[i](u_features, v_features, edge_features,
                                                              node_edge_matrix, node_edge_mask)
-            new_node_features = self.Us[i](layer_node_features[-1], context_features)
+            new_node_features = self.Us[i](node_features, context_features)
 
             if i != self.layers - 1:
                 new_node_features = F.relu(new_node_features)
             if self.residual:
-                cat_node_features = torch.cat([layer_node_features[-1], new_node_features], dim=1)
-                layer_node_features.append(cat_node_features)
+                cat_node_features = torch.cat([node_features, new_node_features], dim=1)
+                node_features = cat_node_features
             else:
-                layer_node_features.append(new_node_features)
-            layer_edge_features.append(new_edge_features)
+                node_features = new_node_features
+            edge_features = new_edge_features
 
-        readout, a = self.R(layer_node_features[-1], mol_node_matrix, mol_node_mask)
+        readout, a = self.R(node_features, mol_node_matrix, mol_node_mask)
         return readout, a
-
-    def get_inner_parameters(self):
-        return chain(
-            reduce(lambda x, y: chain(x, y), map(lambda x: x.parameters(), self.Ms)),
-            reduce(lambda x, y: chain(x, y), map(lambda x: x.parameters(), self.Us)),
-        )
 
     @staticmethod
     def produce_node_edge_matrix(n_node: int, us: list, vs: list, edge_mask: list) -> (torch.Tensor, torch.Tensor):
@@ -109,6 +101,8 @@ class PositionEncoder(Module):
         self.derivation = HamiltonianDerivation(self.p_dim, self.q_dim, dropout=0.0)
         self.dn23 = Linear(self.q_dim, 3)
 
+        self.cache = {}
+
     def forward(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list, matrix_mask_tuple: tuple):
         mol_node_matrix, mol_node_mask = matrix_mask_tuple[0], matrix_mask_tuple[1]
         node_edge_matrix, node_edge_mask = matrix_mask_tuple[2], matrix_mask_tuple[3]
@@ -124,7 +118,7 @@ class PositionEncoder(Module):
         c_losses = []
 
         for i in range(self.layers):
-            dp, dq, _ = self.derivation(ps[i], qs[i], e)
+            dp, dq, _ = self.derivation(ps[i], qs[i], e, mol_node_matrix, mol_node_mask)
             ps.append(ps[i] + self.tau * dp)
             qs.append(qs[i] + self.tau * dq)
 
@@ -154,9 +148,15 @@ class PositionEncoder(Module):
         return d_loss, s_loss, c_loss
 
     def transform(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list,
-                  matrix_mask_tuple: tuple):
-        p, q, s_loss, c_loss = self(v_features, e_features, us, vs, matrix_mask_tuple)
-        return torch.cat([p, q], dim=1), s_loss, c_loss
+                  matrix_mask_tuple: tuple, name=''):
+        if name and name in self.cache.keys():
+            pq = self.cache[name]
+        else:
+            p, q, _, _ = self(v_features, e_features, us, vs, matrix_mask_tuple)
+            pq = torch.cat([p.detach(), q.detach()], dim=1)
+            if name:
+                self.cache[name] = pq
+        return pq, 0, 0
 
     def verbose_print(self, ps, qs, mnm, nem, us, vs, verbose):
         if self.use_cuda:
@@ -195,11 +195,7 @@ class MLP(Module):
 
         in_dims = [i_dim] + h_dims
         out_dims = h_dims + [o_dim]
-        self.linears = [Linear(in_dim, out_dim, bias=True) for in_dim, out_dim in zip(in_dims, out_dims)]
-        for i, linear in enumerate(self.linears):
-            self.register_parameter('{}_weight_{}'.format('MLP', i), linear.weight)
-            self.register_parameter('{}_bias_{}'.format('MLP', i), linear.bias)
-
+        self.linears = ModuleList([Linear(in_dim, out_dim, bias=True) for in_dim, out_dim in zip(in_dims, out_dims)])
         self.relu = ReLU()
         self.dropout = Dropout(p=dropout)
         self.activation = activation

@@ -56,7 +56,7 @@ def atom_features(atom,
         [atom.GetIsAromatic()]
     if max_position:
         results = results + one_of_k_encoding_unk(position, list(range(max_position)))
-    # In case of explicit hydrogen(QM8, QM9), avoid calling `GetTotalNumHs`
+    # In case of explicit hydrogen(QM8, QM9-small), avoid calling `GetTotalNumHs`
     if not explicit_H:
         results = results + one_of_k_encoding_unk(atom.GetTotalNumHs(), [0, 1, 2, 3, 4])
     if use_chirality:

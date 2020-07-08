@@ -15,8 +15,8 @@ FITTER_CONFIG = {
     'HGN_LAYERS': 20,
     'TAU': 0.05,
     'PQ_DIM': 32,
-    'GAMMA_S': 0.001,
-    'GAMMA_C': 0.001,
+    'GAMMA_S': 0.000,
+    'GAMMA_C': 0.000,
 }
 
 FITTER_CONFIG_QM9 = FITTER_CONFIG.copy()
@@ -37,21 +37,24 @@ MODEL_CONFIG = {
     'BATCH': 32,
 
     'POS_DIM': FITTER_CONFIG['PQ_DIM'] * 2,
-    'HE_DIM': 32,
+    'HE_DIM': 128,
     'C_DIMS': [128, 128, 128, 128],
     'F_DIM': 128,
+    'M_RADIUS': 2,
     'MLP_DIMS': [256],
     'MAX_DICT': 1024,
 }
 
 MODEL_CONFIG_QM9 = MODEL_CONFIG.copy()
 MODEL_CONFIG_QM9.update({
-    'LR': 1e-4,
-    'DECAY': 2e-6,
-    'DROPOUT': 0.0,
+    'LR': 10 ** -4.9,
+    'DECAY': 10 ** -4.6,
+    'DROPOUT': 0.5,
     'ITERATION': 300,
     'EVAL': 30,
-    'C_DIMS': [256, 256, 256],
+    'HE_DIM': 280,
+    'C_DIMS': [280, 280],
+    'F_DIM': 280,
     'MLP_DIMS': [],
     'MAX_DICT': 4096,
 })
@@ -59,8 +62,15 @@ MODEL_CONFIG_QM9.update({
 MODEL_CONFIG_LIPOP = MODEL_CONFIG.copy()
 MODEL_CONFIG_LIPOP.update({
     'LR': 2e-4,
-    'DECAY': 5e-5,
+    'DECAY': 1e-4,
+    'DROPOUT': 0.5,
+    'ITERATION': 200,
     'BATCH': 64,
+    'EVAL': 20,
+    'HE_DIM': 256,
+    'C_DIMS': [256, 256, 256],
+    'F_DIM': 256,
+    'M_RADIUS': 4,
 })
 
 MODEL_CONFIG_TOX21 = MODEL_CONFIG.copy()

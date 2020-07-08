@@ -1,7 +1,7 @@
 import torch
 import torch.autograd as autograd
 from torch.nn import Parameter, Module, Linear, Softmax, LogSoftmax, Sigmoid, GRUCell, ELU, LeakyReLU, Dropout, Tanh, \
-    LSTM, Softplus
+    LSTM, Softplus, ReLU, ModuleList
 from torch.nn.utils.rnn import pad_sequence
 from itertools import chain
 
@@ -14,7 +14,7 @@ class ConcatMesPassing(Module):
         self.relu1 = LeakyReLU()
         self.relu2 = LeakyReLU()
         self.relu_e = LeakyReLU()
-        self.attention = Linear(e_dim, 1, bias=True)
+        self.attention = Linear(n_dim + e_dim + n_dim, 1, bias=True)
         self.softmax = Softmax(dim=1)
         self.elu = ELU()
         self.dropout = Dropout(p=dropout)
@@ -31,7 +31,7 @@ class ConcatMesPassing(Module):
         neighbor_features = self.relu1(self.linear(u_e_v_features))
         if neighbor_features.shape[0]:
             neighbor_features = self.dropout(neighbor_features)
-        a = self.relu2(self.attention(new_edge_features))
+        a = self.relu2(self.attention(u_e_v_features))
         d = a.view([-1]).diag()
         node_edge_weight = node_edge_matrix @ d + node_edge_mask
         # print(node_edge_weight)
@@ -62,66 +62,59 @@ class GRUAggregation(Module):
 class AttentivePooling(Module):
     def __init__(self, dim: int, out_dim: int, use_cuda=False, dropout=0.):
         super(AttentivePooling, self).__init__()
-        self.linear1 = Linear(dim, out_dim, bias=True)
-        self.linear2 = Linear(dim, 1, bias=True)
-        self.softmax = Softmax(dim=1)
         self.use_cuda = use_cuda
+        self.attend = Linear(dim, out_dim, bias=True)
+        self.align = Linear(dim, 1, bias=True)
+        self.softmax = Softmax(dim=1)
         self.dropout = Dropout(p=dropout)
-        self.tanh = Tanh()
+        self.relu = LeakyReLU()
 
     def forward(self, node_features: torch.Tensor, mol_node_matrix: torch.Tensor, mol_node_mask: torch.Tensor) \
             -> (torch.Tensor, torch.Tensor):
-        h = self.tanh(self.linear1(self.dropout(node_features)))
-        a = self.linear2(self.dropout(node_features))
+        h = self.relu(self.attend(self.dropout(node_features)))
+        a = self.align(self.dropout(node_features))
         d = a.view([-1]).diag()
         mol_node_weight = mol_node_matrix @ d + mol_node_mask
         mol_node_weight = self.softmax(mol_node_weight)
         return mol_node_weight @ h, mol_node_weight
 
 
-class GraphConvolutionAttentivePooling(Module):
-    def __init__(self, in_dim: int, out_dim: int, use_cuda=False, dropout=0.):
-        super(GraphConvolutionAttentivePooling, self).__init__()
-        self.gcn = GraphConvolutionLayer(in_dim, out_dim, h_dims=[out_dim], dropout=dropout)
-        self.linear2 = Linear(out_dim, 1, bias=True)
-        self.softmax = Softmax(dim=1)
+class AlignAttendPooling(Module):
+    def __init__(self, c_dim: int, m_dim: int, radius=2, use_cuda=False, dropout=0., use_gru=True):
+        super(AlignAttendPooling, self).__init__()
         self.use_cuda = use_cuda
+        self.use_gru = use_gru
+        self.radius = radius
+        self.map = Linear(c_dim, m_dim)
+        self.relu = LeakyReLU()
+        self.relu1 = LeakyReLU()
+        if use_gru:
+            self.gru = GRUCell(c_dim, m_dim)
+        else:
+            self.linear = Linear(c_dim + m_dim, m_dim)
+        self.attend = Linear(c_dim, c_dim)
+        self.align = Linear(m_dim + c_dim, 1)
+        self.softmax = Softmax(dim=1)
+        self.elu = ELU()
+        self.relu2 = ReLU()
         self.dropout = Dropout(p=dropout)
-        self.tanh = Tanh()
 
-    def forward(self, node_features: torch.Tensor, e: torch.Tensor,
-                mol_node_matrix: torch.Tensor, mol_node_mask: torch.Tensor) -> (torch.Tensor, torch.Tensor):
-        h = self.tanh(self.gcn(node_features, e))
-        a = self.linear2(self.dropout(h))
-        d = a.view([-1]).diag()
-        mol_node_weight = mol_node_matrix @ d + mol_node_mask
-        mol_node_weight = self.softmax(mol_node_weight)
-        return mol_node_weight @ h, mol_node_weight
+    def forward(self, node_features: torch.Tensor, mol_node_matrix: torch.Tensor, mol_node_mask: torch.Tensor) \
+            -> (torch.Tensor, torch.Tensor):
+        mol_features = mol_node_matrix @ self.relu(self.map(node_features))
 
+        for i in range(self.radius):
+            h = self.attend(self.dropout(node_features))
+            a = self.relu1(self.align(torch.cat([mol_node_matrix.t() @ mol_features, node_features], dim=-1)))
+            d = a.view([-1]).diag()
+            mol_node_weight = self.softmax(mol_node_matrix @ d + mol_node_mask)
+            context = self.elu(mol_node_weight @ h)
+            if self.use_gru:
+                mol_features = self.relu2(self.gru(context, mol_features))
+            else:
+                mol_features = self.relu2(self.linear(torch.cat([context, mol_features], dim=-1)))
 
-class GraphConvolutionPooling(Module):
-    def __init__(self, in_dim: int, out_dim: int, use_cuda=False, dropout=0.):
-        super(GraphConvolutionPooling, self).__init__()
-        self.gcn = GraphConvolutionLayer(in_dim, out_dim, h_dims=[], dropout=dropout)
-        self.softmax = Softmax(dim=1)
-        self.use_cuda = use_cuda
-        self.tanh = Tanh()
-
-    def forward(self, node_features: torch.Tensor, e: torch.Tensor,
-                mol_node_matrix: torch.Tensor, mol_node_mask: torch.Tensor) -> (torch.Tensor, torch.Tensor):
-        h = self.tanh(self.gcn(node_features, e))
-        mol_node_weight = mol_node_mask
-        mol_node_weight = self.softmax(mol_node_weight)
-        return mol_node_weight @ h, mol_node_weight
-
-
-class MapPooling(Module):
-    def __init__(self, in_dim: int, out_dim: int):
-        super(MapPooling, self).__init__()
-        self.linear = Linear(in_dim, out_dim, False)
-
-    def forward(self, node_features: torch.Tensor) -> torch.Tensor:
-        return torch.sum(self.linear(node_features), dim=0)
+        return mol_features, None
 
 
 class GraphConvolutionLayer(Module):
@@ -129,13 +122,10 @@ class GraphConvolutionLayer(Module):
         super(GraphConvolutionLayer, self).__init__()
         in_dims = [i_dim] + h_dims
         out_dims = h_dims + [o_dim]
-        self.linears = [Linear(in_dim, out_dim, bias=True) for in_dim, out_dim in zip(in_dims, out_dims)]
+        self.linears = ModuleList([Linear(in_dim, out_dim, bias=True) for in_dim, out_dim in zip(in_dims, out_dims)])
         self.relu = LeakyReLU()
         self.activation = activation
         self.dropout = Dropout(dropout)
-        for i, linear in enumerate(self.linears):
-            self.register_parameter('{}_weight_{}'.format('GCN', i), linear.weight)
-            self.register_parameter('{}_bias_{}'.format('GCN', i), linear.bias)
 
     def forward(self, x: torch.Tensor, a: torch.Tensor):
         h = self.dropout(x)
@@ -193,16 +183,16 @@ class DirectDerivation(Module):
 class HamiltonianDerivation(Module):
     def __init__(self, p_dim, q_dim, h_dim=128, dropout=0.0):
         super(HamiltonianDerivation, self).__init__()
-        self.gcl = GraphConvolutionLayer(p_dim + q_dim, h_dim, h_dims=[], dropout=dropout)
+        # self.gcl = GraphConvolutionLayer(p_dim + q_dim, h_dim, h_dims=[], dropout=dropout)
+        self.align_attend = AlignAttendPooling(p_dim + q_dim, h_dim, radius=1, dropout=dropout, use_gru=False)
         self.relu = ELU()
         self.linear = Linear(h_dim, 1)
         self.softplus = Softplus()
-        # for param in chain(self.gcl.parameters(), self.linear.parameters()):
-        #     self.register_parameter("_", param)
 
-    def forward(self, p, q, e):
+    def forward(self, p, q, e, mol_node_matrix, mol_node_mask):
         u = torch.cat([p, q], dim=1)
-        hamiltonians = self.softplus(self.linear(self.relu(self.gcl(u, e))))
+        mol_features = self.align_attend(u, mol_node_matrix, mol_node_mask)[0]
+        hamiltonians = self.softplus(self.linear(self.relu(mol_features)))
         hamilton = hamiltonians.sum()
         dq = autograd.grad(hamilton, p, create_graph=True)[0]
         dp = -1 * autograd.grad(hamilton, q, create_graph=True)[0]

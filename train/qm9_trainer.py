@@ -13,7 +13,7 @@ from .config import MODEL_CONFIG_QM9 as DEFAULT_CONFIG
 from .HeteroGraph import HeteroGraph
 from data.reader import load_qm9
 from utils.sample import sample
-from utils.MatrixCache import MatrixCache
+from utils.cache import MatrixCache
 from net.models import MLP, AMPNN
 from visualize.regress import plt_multiple_scatter
 
@@ -84,10 +84,11 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
     if use_cuda:
         model.cuda()
         regression.cuda()
-    params = list(chain(model.parameters(), regression.parameters()))
-    for param in params:
-        print(param.shape)
-    optimizer = optim.Adam(params, lr=cfg['LR'], weight_decay=cfg['DECAY'])
+    for name, param in chain(model.named_parameters(), regression.named_parameters()):
+        if param.requires_grad:
+            print(name, ":", param.shape)
+    optimizer = optim.Adam(filter(lambda x: x.requires_grad, chain(model.parameters(), regression.parameters())),
+                           lr=cfg['LR'], weight_decay=cfg['DECAY'])
     current_lr = cfg['LR']
     matrix_cache = MatrixCache(cfg['MAX_DICT'])
     loss_fuc = MSELoss()
@@ -102,7 +103,7 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
 
         us, vs, mm_tuple = matrix_cache.fetch(molecules, mask, nfs, name, use_cuda)
 
-        embeddings, _ = model(nfs, efs, us, vs, mm_tuple)
+        embeddings, _ = model(nfs, efs, us, vs, mm_tuple, name)
         std_loss = 0
         logits = regression(embeddings)
         target = norm_properties[mask, :]

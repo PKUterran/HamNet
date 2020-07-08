@@ -14,7 +14,7 @@ print(norm_mnm.numpy())
 dis_mask = norm_mnm.t() @ norm_mnm
 print(dis_mask.pow(2).sum().numpy())
 
-# qm = np.load('data/QM9/QM9_nano.npz', allow_pickle=True)
+# qm = np.load('data/QM9-small/QM9_nano.npz', allow_pickle=True)
 # print(qm['Atoms'])
 # a, b, *c = range(10)
 # print(*c)

@@ -9,7 +9,7 @@ from .HeteroGraph import HeteroGraph
 from data.reader import load_qm9
 from data.gdb9_reader import load_mol_atom_pos
 from utils.sample import sample
-from utils.MatrixCache import MatrixCache
+from utils.cache import MatrixCache
 from net.models import PositionEncoder
 
 
@@ -57,10 +57,9 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
 
     if use_cuda:
         model.cuda()
-    params = list(model.parameters())
-    for param in params:
-        print(param.shape)
-    optimizer = optim.Adam(params, lr=cfg['LR'], weight_decay=cfg['DECAY'])
+    for name, param in model.named_parameters():
+        print(name, ":", param.shape)
+    optimizer = optim.Adam(model.parameters(), lr=cfg['LR'], weight_decay=cfg['DECAY'])
     current_lr = cfg['LR']
     matrix_cache = MatrixCache(cfg['MAX_DICT'])
     best_val = -1e8

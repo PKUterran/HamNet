@@ -13,7 +13,7 @@ from .config import MODEL_CONFIG_LIPOP as DEFAULT_CONFIG
 from .HeteroGraph import HeteroGraph
 from data.reader import load_lipop
 from utils.sample import sample
-from utils.MatrixCache import MatrixCache
+from utils.cache import MatrixCache
 from net.models import MLP, AMPNN
 from visualize.regress import plt_multiple_scatter
 
@@ -78,15 +78,15 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
                   config=cfg,
                   position_encoder=position_encoder,
                   use_cuda=use_cuda)
-
     regression = MLP(cfg['F_DIM'], 1, h_dims=cfg['MLP_DIMS'], dropout=cfg['DROPOUT'])
     if use_cuda:
         model.cuda()
         regression.cuda()
-    params = list(chain(model.parameters(), regression.parameters()))
-    for param in params:
-        print(param.shape)
-    optimizer = optim.Adam(params, lr=cfg['LR'], weight_decay=cfg['DECAY'])
+    for name, param in chain(model.named_parameters(), regression.named_parameters()):
+        if param.requires_grad:
+            print(name, ":", param.shape)
+    optimizer = optim.Adam(filter(lambda x: x.requires_grad, chain(model.parameters(), regression.parameters())),
+                           lr=cfg['LR'], weight_decay=cfg['DECAY'])
     current_lr = cfg['LR']
     matrix_cache = MatrixCache(cfg['MAX_DICT'])
     loss_fuc = MSELoss()

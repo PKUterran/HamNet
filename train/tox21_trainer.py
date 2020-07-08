@@ -12,7 +12,7 @@ from .config import MODEL_CONFIG_TOX21 as DEFAULT_CONFIG
 from .HeteroGraph import HeteroGraph
 from data.reader import load_tox21
 from utils.sample import sample
-from utils.MatrixCache import MatrixCache
+from utils.cache import MatrixCache
 from net.models import MLP, AMPNN
 from visualize.regress import plt_multiple_scatter
 
