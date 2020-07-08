@@ -10,7 +10,7 @@ from train.tox21_trainer import train_tox21
 
 fit_qm9(use_cuda=True,
         limit=-1,
-        use_tqdm=True,
+        use_tqdm=False,
         force_save=True,
         model_save_path='net/server.pt')
 
