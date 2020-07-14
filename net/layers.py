@@ -19,7 +19,8 @@ class ConcatMesPassing(Module):
         self.elu = ELU()
         self.dropout = Dropout(p=dropout)
 
-    def forward(self, u_features: torch.Tensor, v_features: torch.Tensor, edge_features: torch.Tensor,
+    def forward(self, u_features: torch.Tensor, v_features: torch.Tensor,
+                edge_features: torch.Tensor, pos_features: torch.Tensor,
                 node_edge_matrix: torch.Tensor, node_edge_mask: torch.Tensor) -> (torch.Tensor, torch.Tensor):
         u_e_v_features = torch.cat([u_features, edge_features, v_features], dim=1)
         if u_e_v_features.shape[0]:
@@ -32,6 +33,42 @@ class ConcatMesPassing(Module):
         if neighbor_features.shape[0]:
             neighbor_features = self.dropout(neighbor_features)
         a = self.relu2(self.attention(u_e_v_features))
+        d = a.view([-1]).diag()
+        node_edge_weight = node_edge_matrix @ d + node_edge_mask
+        # print(node_edge_weight)
+        node_edge_weight = self.softmax(node_edge_weight)
+        # print(node_edge_weight)
+        context_features = self.elu(node_edge_weight @ neighbor_features)
+        return context_features, new_edge_features
+
+
+class PosConcatMesPassing(Module):
+    def __init__(self, n_dim: int, e_dim: int, p_dim: int, c_dim: int, dropout=0.):
+        super(PosConcatMesPassing, self).__init__()
+        self.linear = Linear(n_dim + e_dim + p_dim + n_dim, c_dim, bias=True)
+        self.linear_e = Linear(n_dim + e_dim + p_dim + n_dim, e_dim, bias=True)
+        self.relu1 = LeakyReLU()
+        self.relu2 = LeakyReLU()
+        self.relu_e = LeakyReLU()
+        self.attention = Linear(n_dim + e_dim + p_dim + n_dim, 1, bias=True)
+        self.softmax = Softmax(dim=1)
+        self.elu = ELU()
+        self.dropout = Dropout(p=dropout)
+
+    def forward(self, u_features: torch.Tensor, v_features: torch.Tensor,
+                edge_features: torch.Tensor, pos_features: torch.Tensor,
+                node_edge_matrix: torch.Tensor, node_edge_mask: torch.Tensor) -> (torch.Tensor, torch.Tensor):
+        u_e_p_v_features = torch.cat([u_features, edge_features, pos_features, v_features], dim=1)
+        if u_e_p_v_features.shape[0]:
+            u_e_p_v_features = self.dropout(u_e_p_v_features)
+        new_edge_features = self.relu_e(self.linear_e(u_e_p_v_features))
+        u_e_p_v_features = torch.cat([u_features, new_edge_features, pos_features, v_features], dim=1)
+        if u_e_p_v_features.shape[0]:
+            u_e_p_v_features = self.dropout(u_e_p_v_features)
+        neighbor_features = self.relu1(self.linear(u_e_p_v_features))
+        if neighbor_features.shape[0]:
+            neighbor_features = self.dropout(neighbor_features)
+        a = self.relu2(self.attention(u_e_p_v_features))
         d = a.view([-1]).diag()
         node_edge_weight = node_edge_matrix @ d + node_edge_mask
         # print(node_edge_weight)

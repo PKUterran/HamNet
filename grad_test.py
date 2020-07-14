@@ -44,26 +44,30 @@
 # print(torch.cat([q, res], dim=1))
 
 import torch
-from torch.nn import LSTM
-from torch.nn.utils.rnn import pack_padded_sequence, pad_sequence, pad_packed_sequence
 
-a = torch.tensor([[1, 0], [1, 1], [0, 1]], dtype=torch.float32)
-b = torch.tensor([[1, 0], [0, 1]], dtype=torch.float32)
-c = torch.tensor([[1, 0], [0, 1], [0, 1], [1, 0]], dtype=torch.float32)
-nfs = torch.cat([a, b, c])
-print(nfs)
-lstm = LSTM(2, 6, 1)
-mnm = torch.tensor([[1, 1, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1, 1, 1, 1]],
-                   dtype=torch.int64)
+t = torch.tensor([[1, 0, 0], [0, 1, 1]])
+print(t[0] > 0)
 
-seqs = [nfs[n == 1, :] for n in mnm]
-print(seqs)
-lengths = [s.shape[0] for s in seqs]
-print(lengths)
-m = pad_sequence(seqs)
-print(m)
-output, (hn, cn) = lstm(m)
-print(output)
-ret = torch.cat([output[:lengths[i], i, :] for i in range(len(lengths))])
-print(ret[:, :3], ret[:, 3:])
+# from torch.nn import LSTM
+# from torch.nn.utils.rnn import pack_padded_sequence, pad_sequence, pad_packed_sequence
+
+# a = torch.tensor([[1, 0], [1, 1], [0, 1]], dtype=torch.float32)
+# b = torch.tensor([[1, 0], [0, 1]], dtype=torch.float32)
+# c = torch.tensor([[1, 0], [0, 1], [0, 1], [1, 0]], dtype=torch.float32)
+# nfs = torch.cat([a, b, c])
+# print(nfs)
+# lstm = LSTM(2, 6, 1)
+# mnm = torch.tensor([[1, 1, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1, 1, 1, 1]],
+#                    dtype=torch.int64)
+#
+# seqs = [nfs[n == 1, :] for n in mnm]
+# print(seqs)
+# lengths = [s.shape[0] for s in seqs]
+# print(lengths)
+# m = pad_sequence(seqs)
+# print(m)
+# output, (hn, cn) = lstm(m)
+# print(output)
+# ret = torch.cat([output[:lengths[i], i, :] for i in range(len(lengths))])
+# print(ret[:, :3], ret[:, 3:])
 

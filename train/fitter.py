@@ -10,7 +10,11 @@ from data.reader import load_qm9
 from data.gdb9_reader import load_mol_atom_pos
 from utils.sample import sample
 from utils.cache import MatrixCache
+from utils.rotate import rotate_to
+from visualize.molecule import plt_molecule_3d
 from net.models import PositionEncoder
+
+GRAPH_PATH = 'graphs/pos/'
 
 
 def set_seed(seed: int, use_cuda: bool):
@@ -64,6 +68,23 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
     matrix_cache = MatrixCache(cfg['MAX_DICT'])
     best_val = -1e8
 
+    def visualize(smiles_list, pos: torch.Tensor, fit_pos: torch.Tensor, mol_node_matrix: torch.Tensor, vis=range(5)):
+        if use_cuda:
+            pos = pos.cpu()
+            fit_pos = fit_pos.cpu()
+            mol_node_matrix = mol_node_matrix.cpu()
+        pos = pos.detach()
+        fit_pos = fit_pos.detach()
+        for i in vis:
+            node_mask = mol_node_matrix[i] > 0
+            pos_i = pos[node_mask == 1, :]
+            fit_pos_i = fit_pos[node_mask == 1, :]
+            new_pos_i = rotate_to(pos_i, fit_pos_i)
+            plt_molecule_3d(new_pos_i.numpy(), smiles_list[i],
+                            title='fit_qm9_{}_{}'.format(epoch, i), d=GRAPH_PATH)
+            plt_molecule_3d(fit_pos_i.numpy(), smiles_list[i],
+                            title='fit_qm9_origin_{}'.format(i), d=GRAPH_PATH)
+
     def forward(mask: list, name=None) -> (torch.Tensor, torch.Tensor, torch.Tensor):
         nfs = torch.cat([molecules[i].node_features for i in mask])
         efs = torch.cat([molecules[i].edge_features for i in mask])
@@ -75,7 +96,9 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
 
         us, vs, mm_tuple = matrix_cache.fetch(molecules, mask, nfs, name, use_cuda)
 
-        d_loss, s_loss, c_loss = model.fit(nfs, efs, us, vs, mm_tuple, atom_pos, print_mode=name == 'test59')
+        d_loss, s_loss, c_loss, pos = model.fit(nfs, efs, us, vs, mm_tuple, atom_pos, print_mode=name == 'test0')
+        if name == 'test0':
+            visualize([smiles[i] for i in mask], pos, atom_pos, mm_tuple[0])
         return d_loss, s_loss, c_loss
 
     def train(mask_list: list, name=None):

@@ -12,14 +12,14 @@ fit_qm9(use_cuda=True,
         limit=-1,
         use_tqdm=False,
         force_save=True,
-        model_save_path='net/server.pt')
+        model_save_path='net/server2.pt')
 
 # train_qm9(use_cuda=True,
-#           limit=-1,
+#           limit=20000,
 #           use_tqdm=False,
 #           use_pos=False,
 #           force_save=True,
-#           position_encoder_path='',
+#           position_encoder_path='net/server.pt',
 #           )
 
 # train_lipop(use_cuda=True,

@@ -8,8 +8,8 @@ FITTER_CONFIG = {
 
     'LR': 1e-4,
     'DECAY': 1e-5,
-    'DROPOUT': 0.0,
-    'ITERATION': 100,
+    'DROPOUT': 0.5,
+    'ITERATION': 50,
     'BATCH': 32,
 
     'HGN_LAYERS': 20,
@@ -49,7 +49,7 @@ MODEL_CONFIG_QM9 = MODEL_CONFIG.copy()
 MODEL_CONFIG_QM9.update({
     'LR': 10 ** -4.9,
     'DECAY': 10 ** -4.6,
-    'DROPOUT': 0.5,
+    'DROPOUT': 0.0,
     'ITERATION': 300,
     'EVAL': 30,
     'HE_DIM': 280,
