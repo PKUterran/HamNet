@@ -8,7 +8,7 @@ from functools import reduce
 from numpy.linalg import norm
 
 from .layers import ConcatMesPassing, PosConcatMesPassing, GRUAggregation, AlignAttendPooling, \
-    HamiltonianDerivation, LstmPQEncoder
+    HamiltonianDerivation, DissipativeHamiltonianDerivation, LstmPQEncoder
 from visualize.trajectory import plt_trajectory
 from utils.func import re_index
 
@@ -103,7 +103,8 @@ class PositionEncoder(Module):
 
         self.e_encoder = Linear(n_dim + e_dim + n_dim, 1)
         self.pq_encoder = LstmPQEncoder(n_dim, self.p_dim)
-        self.derivation = HamiltonianDerivation(self.p_dim, self.q_dim, dropout=0.0)
+        # self.derivation = HamiltonianDerivation(self.p_dim, self.q_dim, dropout=0.0)
+        self.derivation = DissipativeHamiltonianDerivation(n_dim, self.p_dim, self.q_dim, dropout=0.0)
         self.dn23 = Linear(self.q_dim, 3)
 
         self.cache = {}
@@ -121,9 +122,12 @@ class PositionEncoder(Module):
         qs = [q0]
         s_losses = []
         c_losses = []
+        h = None
+        d = None
 
         for i in range(self.layers):
-            dp, dq, _ = self.derivation(ps[i], qs[i], e, mol_node_matrix, mol_node_mask)
+            dp, dq, h, d = self.derivation(v_features, ps[i], qs[i], e, mol_node_matrix, mol_node_mask,
+                                           return_energy=True)
             ps.append(ps[i] + self.tau * dp)
             qs.append(qs[i] + self.tau * dq)
 
@@ -134,11 +138,11 @@ class PositionEncoder(Module):
         c_loss = sum(c_losses)
         # self.verbose_print(ps, qs, mol_node_matrix, node_edge_matrix, us, vs, verbose)
 
-        return ps[-1], qs[-1], s_loss, c_loss
+        return ps[-1], qs[-1], s_loss, c_loss, h, d
 
     def fit(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list,
             matrix_mask_tuple: tuple, fit_pos: torch.Tensor, print_mode=False):
-        _, q, s_loss, c_loss = self(v_features, e_features, us, vs, matrix_mask_tuple)
+        _, q, s_loss, c_loss, h, d = self(v_features, e_features, us, vs, matrix_mask_tuple)
         pos = self.dn23(q)
         mol_node_matrix = matrix_mask_tuple[0]
         norm_mnm = mol_node_matrix / mol_node_matrix.sum(dim=1).unsqueeze(-1)
@@ -147,6 +151,8 @@ class PositionEncoder(Module):
         fit_dis = (fit_pos.unsqueeze(0) - fit_pos.unsqueeze(1)).norm(dim=2)
         d_loss = ((dis - fit_dis) * dis_mask).pow(2).sum() / mol_node_matrix.shape[0]
         if print_mode:
+            print(h.cpu().detach().numpy()[:8])
+            print(d.cpu().detach().numpy()[:8])
             print(dis_mask.cpu().detach().numpy()[:8, :8])
             print(dis.cpu().detach().numpy()[:8, :8])
             print(fit_dis.cpu().detach().numpy()[:8, :8])
@@ -157,7 +163,7 @@ class PositionEncoder(Module):
         if name and name in self.cache.keys():
             pq = self.cache[name]
         else:
-            p, q, _, _ = self(v_features, e_features, us, vs, matrix_mask_tuple)
+            p, q, _, _, _, _ = self(v_features, e_features, us, vs, matrix_mask_tuple)
             pq = torch.cat([p.detach(), q.detach()], dim=1)
             if name:
                 self.cache[name] = pq

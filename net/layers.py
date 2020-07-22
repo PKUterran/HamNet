@@ -217,6 +217,67 @@ class DirectDerivation(Module):
         return dp, dq
 
 
+class Massive(Module):
+    def __init__(self, n_dim):
+        super(Massive, self).__init__()
+        self.linear = Linear(n_dim, 1)
+        self.softplus = Softplus()
+
+    def forward(self, n):
+        return self.softplus(self.linear(n))
+
+
+class KineticEnergy(Module):
+    def __init__(self):
+        super(KineticEnergy, self).__init__()
+
+    def forward(self, p, m):
+        return torch.sum((p ** 2), dim=1, keepdim=True) * (1 / m)
+
+
+class PotentialEnergy(Module):
+    def __init__(self, q_dim, h_dim=128, dropout=0.0):
+        super(PotentialEnergy, self).__init__()
+        self.gcn = GraphConvolutionLayer(q_dim, 1, h_dims=[h_dim], dropout=dropout)
+
+    def forward(self, q, e):
+        return self.gcn(q, e)
+
+
+class DissipatedEnergy(Module):
+    def __init__(self, n_dim, p_dim):
+        super(DissipatedEnergy, self).__init__()
+        self.linear = Linear(n_dim, 1)
+        self.softplus = Softplus()
+
+    def forward(self, n, p):
+        c = self.softplus(self.linear(n))
+        f = torch.sum(p ** 2, dim=1, keepdim=True)
+        return c * f
+
+
+class DissipativeHamiltonianDerivation(Module):
+    def __init__(self, n_dim, p_dim, q_dim, dropout=0.0):
+        super(DissipativeHamiltonianDerivation, self).__init__()
+        self.massive = Massive(n_dim)
+        self.T = KineticEnergy()
+        self.U = PotentialEnergy(q_dim, dropout=dropout)
+        self.F = DissipatedEnergy(n_dim, p_dim)
+
+    def forward(self, n, p, q, e, mol_node_matrix, mol_node_mask, return_energy=False):
+        m = self.massive(n)
+        hamiltonians = self.T(p, m) + self.U(q, e)
+        dissipations = self.F(n, p)
+        hamilton = hamiltonians.sum()
+        dissipated = dissipations.sum()
+        dq = autograd.grad(hamilton, p, create_graph=True)[0]
+        dp = -1 * (autograd.grad(hamilton, q, create_graph=True)[0] +
+                   autograd.grad(dissipated, p, create_graph=True)[0] * m.detach())
+        if return_energy:
+            return dp, dq, hamiltonians, dissipations
+        return dp, dq
+
+
 class HamiltonianDerivation(Module):
     def __init__(self, p_dim, q_dim, h_dim=128, dropout=0.0):
         super(HamiltonianDerivation, self).__init__()
@@ -228,9 +289,10 @@ class HamiltonianDerivation(Module):
 
     def forward(self, p, q, e, mol_node_matrix, mol_node_mask):
         u = torch.cat([p, q], dim=1)
+        # mol_features = self.gcl(u, e)
         mol_features = self.align_attend(u, mol_node_matrix, mol_node_mask)[0]
         hamiltonians = self.softplus(self.linear(self.relu(mol_features)))
         hamilton = hamiltonians.sum()
         dq = autograd.grad(hamilton, p, create_graph=True)[0]
         dp = -1 * autograd.grad(hamilton, q, create_graph=True)[0]
-        return dp, dq, hamiltonians
+        return dp, dq

@@ -12,7 +12,7 @@ fit_qm9(use_cuda=True,
         limit=-1,
         use_tqdm=False,
         force_save=True,
-        model_save_path='net/server2.pt')
+        model_save_path='net/server.pt')
 
 # train_qm9(use_cuda=True,
 #           limit=20000,

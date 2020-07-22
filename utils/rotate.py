@@ -24,7 +24,7 @@ def rotate_to(pos: torch.Tensor, fit_pos: torch.Tensor) -> torch.Tensor:
         if i == EPOCH - 1:
             print('fit loss:', fit_loss.item())
             print('constraint loss:', c_loss.item())
-        loss = fit_loss + c_loss * 1
+        loss = fit_loss + c_loss * 5
         loss.backward()
         optimizer.step()
         loss_1 = loss.item()
