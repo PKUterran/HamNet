@@ -264,15 +264,18 @@ class DissipativeHamiltonianDerivation(Module):
         self.U = PotentialEnergy(q_dim, dropout=dropout)
         self.F = DissipatedEnergy(n_dim, p_dim)
 
-    def forward(self, n, p, q, e, mol_node_matrix, mol_node_mask, return_energy=False):
+    def forward(self, n, p, q, e, mol_node_matrix, mol_node_mask, return_energy=False, dissipate=True):
         m = self.massive(n)
         hamiltonians = self.T(p, m) + self.U(q, e)
         dissipations = self.F(n, p)
         hamilton = hamiltonians.sum()
         dissipated = dissipations.sum()
         dq = autograd.grad(hamilton, p, create_graph=True)[0]
-        dp = -1 * (autograd.grad(hamilton, q, create_graph=True)[0] +
-                   autograd.grad(dissipated, p, create_graph=True)[0] * m.detach())
+        if dissipate:
+            dp = -1 * (autograd.grad(hamilton, q, create_graph=True)[0] +
+                       autograd.grad(dissipated, p, create_graph=True)[0] * m.detach())
+        else:
+            dp = -1 * autograd.grad(hamilton, q, create_graph=True)[0]
         if return_energy:
             return dp, dq, hamiltonians, dissipations
         return dp, dq
