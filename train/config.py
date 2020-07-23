@@ -49,8 +49,8 @@ MODEL_CONFIG = {
 MODEL_CONFIG_QM9 = MODEL_CONFIG.copy()
 MODEL_CONFIG_QM9.update({
     'LR': 10 ** -4.9,
-    'DECAY': 10 ** -4.6,
-    'DROPOUT': 0.0,
+    'DECAY': 10 ** -5.9,
+    'DROPOUT': 0.5,
     'ITERATION': 300,
     'EVAL': 30,
     'HE_DIM': 280,
