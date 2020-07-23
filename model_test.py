@@ -8,19 +8,19 @@ from train.qm9_trainer import train_qm9
 from train.lipop_trainer import train_lipop
 from train.tox21_trainer import train_tox21
 
-fit_qm9(use_cuda=True,
-        limit=-1,
-        use_tqdm=False,
-        force_save=True,
-        model_save_path='net/server.pt')
+# fit_qm9(use_cuda=True,
+#         limit=-1,
+#         use_tqdm=False,
+#         force_save=True,
+#         model_save_path='net/server.pt')
 
-# train_qm9(use_cuda=True,
-#           limit=20000,
-#           use_tqdm=False,
-#           use_pos=False,
-#           force_save=True,
-#           position_encoder_path='net/server.pt',
-#           )
+train_qm9(use_cuda=True,
+          limit=-1,
+          use_tqdm=False,
+          use_pos=False,
+          force_save=True,
+          position_encoder_path='net/server.pt',
+          )
 
 # train_lipop(use_cuda=True,
 #             limit=-1,
