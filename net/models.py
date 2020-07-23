@@ -99,7 +99,7 @@ class PositionEncoder(Module):
         self.layers = config['HGN_LAYERS']
         self.tau = config['TAU']
         self.dropout = config['DROPOUT']
-        self.dissipate = config['DISSIPATE']
+        # self.dissipate = config['DISSIPATE']
         self.use_cuda = use_cuda
 
         self.e_encoder = Linear(n_dim + e_dim + n_dim, 1)
@@ -128,7 +128,7 @@ class PositionEncoder(Module):
 
         for i in range(self.layers):
             dp, dq, h, d = self.derivation(v_features, ps[i], qs[i], e, mol_node_matrix, mol_node_mask,
-                                           return_energy=True, dissipate=self.dissipate)
+                                           return_energy=True, dissipate=True)
             ps.append(ps[i] + self.tau * dp)
             qs.append(qs[i] + self.tau * dq)
 
