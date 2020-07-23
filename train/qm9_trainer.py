@@ -177,7 +177,7 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
         print('\t\tMAE: {}.'.format(np.average(maes, axis=0) * prop_std))
         print('\t\tMulti-MAE: {:.3f}.'.format(np.average(maes, axis=0).sum()))
         logs[-1].update({'{}_loss'.format(name): u_loss})
-        logs[-1].update({'{}_metric'.format(name): np.average(maes, axis=0).sum()})
+        logs[-1].update({'{}_metric'.format(name): sum(np.average(maes, axis=0))})
 
         if visualize:
             all_logits = np.vstack(logits_list)
