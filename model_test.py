@@ -20,7 +20,7 @@ train_qm9(use_cuda=True,
           use_tqdm=False,
           use_pos=False,
           force_save=True,
-          position_encoder_path='net/server.pt',
+          position_encoder_path=None,
           )
 
 # train_lipop(use_cuda=True,
