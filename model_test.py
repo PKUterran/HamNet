@@ -14,12 +14,22 @@ from train.tox21_trainer import train_tox21
 #         force_save=True,
 #         special_config={'DISSIPATE': False},
 #         model_save_path='net/server-noD.pt')
-
 train_qm9(use_cuda=True,
           limit=-1,
           use_tqdm=False,
           use_pos=False,
           force_save=True,
+          special_config={'DROPOUT': 0.5},
+          position_encoder_path='',
+          tag='qm9_dropout5_nopos'
+          )
+
+train_qm9(use_cuda=True,
+          limit=-1,
+          use_tqdm=False,
+          use_pos=False,
+          force_save=False,
+          special_config={'DROPOUT': 0.5},
           position_encoder_path='net/server.pt',
           tag='qm9_dropout5_pos'
           )

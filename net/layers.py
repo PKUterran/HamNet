@@ -19,8 +19,7 @@ class ConcatMesPassing(Module):
         self.elu = ELU()
         self.dropout = Dropout(p=dropout)
 
-    def forward(self, u_features: torch.Tensor, v_features: torch.Tensor,
-                edge_features: torch.Tensor, pos_features: torch.Tensor,
+    def forward(self, u_features: torch.Tensor, v_features: torch.Tensor, edge_features: torch.Tensor,
                 node_edge_matrix: torch.Tensor, node_edge_mask: torch.Tensor) -> (torch.Tensor, torch.Tensor):
         u_e_v_features = torch.cat([u_features, edge_features, v_features], dim=1)
         if u_e_v_features.shape[0]:
