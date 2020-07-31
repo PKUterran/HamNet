@@ -8,11 +8,31 @@ import torch
 #
 # plt_trajectory([a, b], name='test')
 
-mol_node_matrix = torch.tensor([[1, 1, 0], [0, 0, 1]], dtype=torch.float32)
-norm_mnm = mol_node_matrix / mol_node_matrix.sum(dim=1).unsqueeze(-1)
-print(norm_mnm.numpy())
-dis_mask = norm_mnm.t() @ norm_mnm
-print(dis_mask.pow(2).sum().numpy())
+# mol_node_matrix = torch.tensor([[1, 1, 0], [0, 0, 1]], dtype=torch.float32)
+# norm_mnm = mol_node_matrix / mol_node_matrix.sum(dim=1).unsqueeze(-1)
+# print(norm_mnm.numpy())
+# dis_mask = norm_mnm.t() @ norm_mnm
+# print(dis_mask.pow(2).sum().numpy())
+
+m = torch.tensor([[1], [2]], dtype=torch.float32)
+mm = m * m.reshape([1, -1])
+print(mm)
+q = mm
+t = (torch.unsqueeze(q, dim=0) - torch.unsqueeze(q, dim=1)) @ torch.tensor([[1], [1]], dtype=torch.float32)
+print(t)
+print(t.squeeze(2))
+# e = torch.norm(torch.unsqueeze(q, dim=0) - torch.unsqueeze(q, dim=1), dim=2)
+# print(e ** -12)
+# ret = torch.tensor([[1, 3], [0, 1]], dtype=torch.float32)
+# ret = ret - torch.sum(ret, dim=0) / ret.shape[0]
+# ret = ret / torch.sqrt(torch.sum(ret ** 2, dim=0) / ret.shape[0])
+# print(ret)
+# me = e * m.squeeze(dim=-1)
+# print(m.squeeze(dim=-1))
+# print(me)
+# me = e * m.squeeze(dim=-1)
+# me = me / torch.sum(me, dim=1, keepdim=True)
+# print(me)
 
 # qm = np.load('data/QM9-small/QM9_nano.npz', allow_pickle=True)
 # print(qm['Atoms'])

@@ -99,13 +99,15 @@ class PositionEncoder(Module):
         self.layers = config['HGN_LAYERS']
         self.tau = config['TAU']
         self.dropout = config['DROPOUT']
-        # self.dissipate = config['DISSIPATE']
+        self.dissipate = config['DISSIPATE']
+        self.disturb = config['DISTURB']
         self.use_cuda = use_cuda
 
         self.e_encoder = Linear(n_dim + e_dim + n_dim, 1)
-        self.pq_encoder = LstmPQEncoder(n_dim, self.p_dim)
+        self.pq_encoder = LstmPQEncoder(n_dim, self.p_dim, use_cuda=use_cuda, disturb=self.disturb)
         # self.derivation = HamiltonianDerivation(self.p_dim, self.q_dim, dropout=0.0)
-        self.derivation = DissipativeHamiltonianDerivation(n_dim, self.p_dim, self.q_dim, dropout=0.0)
+        self.derivation = DissipativeHamiltonianDerivation(n_dim, self.p_dim, self.q_dim,
+                                                           use_cuda=use_cuda, dropout=0.0)
         self.dn23 = Linear(self.q_dim, 3)
 
         self.cache = {}
@@ -127,8 +129,9 @@ class PositionEncoder(Module):
         d = None
 
         for i in range(self.layers):
-            dp, dq, h, d = self.derivation(v_features, ps[i], qs[i], e, mol_node_matrix, mol_node_mask,
-                                           return_energy=True, dissipate=True)
+            # dp, dq = self.derivation(ps[i], qs[i], e, mol_node_matrix, mol_node_mask)
+            dp, dq, h, d = self.derivation(v_features, ps[i], qs[i], e.detach(), mol_node_matrix, mol_node_mask,
+                                           return_energy=True, dissipate=self.dissipate)
             ps.append(ps[i] + self.tau * dp)
             qs.append(qs[i] + self.tau * dq)
 
@@ -152,8 +155,9 @@ class PositionEncoder(Module):
         fit_dis = (fit_pos.unsqueeze(0) - fit_pos.unsqueeze(1)).norm(dim=2)
         d_loss = ((dis - fit_dis) * dis_mask).pow(2).sum() / mol_node_matrix.shape[0]
         if print_mode:
-            print(h.cpu().detach().numpy()[:8])
-            print(d.cpu().detach().numpy()[:8])
+            if 'cpu' in dir(h):
+                print(h.cpu().detach().numpy()[:8])
+                print(d.cpu().detach().numpy()[:8])
             print(dis_mask.cpu().detach().numpy()[:8, :8])
             print(dis.cpu().detach().numpy()[:8, :8])
             print(fit_dis.cpu().detach().numpy()[:8, :8])

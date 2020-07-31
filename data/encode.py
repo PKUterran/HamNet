@@ -35,6 +35,37 @@ ATOMS = [
     'other'
 ]
 
+ATOMS_MASS = {
+    'B': 10.811,
+    'C': 12.0107,
+    'N': 14.0067,
+    'O': 15.9994,
+    'F': 18.9984032,
+    'Si': 28.2855,
+    'P': 30.973762,
+    'S': 32.065,
+    'Cl': 35.453,
+    'As': 74.92160,
+    'Se': 78.96,
+    'Br': 79.904,
+    'Te': 127.60,
+    'I': 126.90447,
+    'At': 209.9871,
+    'other': 50.0,
+}
+
+
+def get_atoms_massive_matrix(atoms: list) -> np.ndarray:
+    massive = []
+    for a in atoms:
+        massive.append(ATOMS_MASS[a])
+    massive = np.vstack([np.array(massive).reshape([-1, 1]), np.zeros([num_atom_features() - len(atoms), 1])])
+    return massive
+
+
+def get_default_atoms_massive_matrix() -> np.ndarray:
+    return get_atoms_massive_matrix(ATOMS)
+
 
 def atom_features(atom,
                   explicit_H=True,

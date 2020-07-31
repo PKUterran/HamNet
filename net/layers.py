@@ -5,6 +5,8 @@ from torch.nn import Parameter, Module, Linear, Softmax, LogSoftmax, Sigmoid, GR
 from torch.nn.utils.rnn import pad_sequence
 from itertools import chain
 
+from data.encode import get_default_atoms_massive_matrix
+
 
 class ConcatMesPassing(Module):
     def __init__(self, n_dim: int, e_dim: int, c_dim: int, dropout=0.):
@@ -179,8 +181,10 @@ class GraphConvolutionLayer(Module):
 
 
 class LstmPQEncoder(Module):
-    def __init__(self, in_dim, pq_dim, h_dim=128, num_layers=1):
+    def __init__(self, in_dim, pq_dim, h_dim=128, num_layers=1, use_cuda=False, disturb=False):
         super(LstmPQEncoder, self).__init__()
+        self.use_cuda = use_cuda
+        self.disturb = disturb
         self.pq_dim = pq_dim
         self.gcl = GraphConvolutionLayer(in_dim, h_dim, h_dims=[])
         self.relu = ELU()
@@ -194,6 +198,16 @@ class LstmPQEncoder(Module):
         m = pad_sequence(seqs)
         output, _ = self.rnn(m)
         ret = torch.cat([output[:lengths[i], i, :] for i in range(len(lengths))])
+        if self.disturb:
+            d = torch.normal(mean=torch.zeros(ret.size()), std=torch.full(ret.size(), 0.1))
+            if self.use_cuda:
+                d = d.cuda()
+            ret = ret + d
+        ret = ret - torch.sum(ret, dim=0) / ret.shape[0]
+        try:
+            ret = ret / torch.sqrt(torch.sum(ret ** 2, dim=0) / ret.shape[0])
+        except:
+            pass
         return ret[:, :self.pq_dim], ret[:, self.pq_dim:]
 
 
@@ -217,64 +231,105 @@ class DirectDerivation(Module):
 
 
 class Massive(Module):
-    def __init__(self, n_dim):
+    def __init__(self, n_dim, use_cuda=False):
         super(Massive, self).__init__()
-        self.linear = Linear(n_dim, 1)
-        self.softplus = Softplus()
+        self.massive_matrix = torch.from_numpy(get_default_atoms_massive_matrix()).type(torch.float32)
+        if use_cuda:
+            self.massive_matrix = self.massive_matrix.cuda()
 
     def forward(self, n):
-        return self.softplus(self.linear(n))
+        m = n @ self.massive_matrix / 50
+        # print('m:', m[:5])
+        return m
 
 
 class KineticEnergy(Module):
-    def __init__(self):
+    def __init__(self, p_dim):
         super(KineticEnergy, self).__init__()
+        # self.linear = Linear(p_dim, p_dim)
+        # self.softmax = Softmax(dim=1)
+        self.tanh = Tanh()
 
     def forward(self, p, m):
-        return torch.sum((p ** 2), dim=1, keepdim=True) * (1 / m)
+        # dim_attn = self.softmax(self.linear(p))
+        dim_energy = (p ** 2)
+        if torch.isnan(dim_energy.sum()):
+            dim_energy[torch.isnan(dim_energy)] = 0
+        t = torch.sum(dim_energy, dim=1, keepdim=True) / m
+        # print('t:', t[:1])
+        return t
 
 
 class PotentialEnergy(Module):
-    def __init__(self, q_dim, h_dim=128, dropout=0.0):
+    def __init__(self, n_dim, q_dim, h_dim=32, dropout=0.0, use_cuda=False):
         super(PotentialEnergy, self).__init__()
-        self.gcn = GraphConvolutionLayer(q_dim, 1, h_dims=[h_dim], dropout=dropout)
+        self.use_cuda = use_cuda
+        self.linear1 = Linear(q_dim, h_dim, bias=True)
+        self.relu = ReLU()
+        self.linear2 = Linear(h_dim, 1, bias=True)
+        self.softplus = Softplus()
 
-    def forward(self, q, e):
-        return self.gcn(q, e)
+    def forward(self, n, m, q, e, nnm):
+        norm_m = m
+        mm = norm_m * norm_m.reshape([1, -1])
+        eye = torch.eye(nnm.shape[1], dtype=torch.float32)
+        if self.use_cuda:
+            eye = eye.cuda()
+        mask = nnm * mm
+        delta_p = torch.unsqueeze(q, dim=0) - torch.unsqueeze(q, dim=1)
+        root = self.linear1(delta_p)
+        distance = (self.softplus(torch.sum(root ** 2, dim=2))) * (-eye + 1) + eye
+        # print(distance)
+        energy = mask * (distance ** -2 - distance ** -1)
+        if torch.isnan(energy.sum()):
+            energy[torch.isnan(energy)] = 0
+        # print(energy)
+        p = torch.sum(energy, dim=1, keepdim=True)
+        # print('p:', p[:1])
+        return p
 
 
 class DissipatedEnergy(Module):
-    def __init__(self, n_dim, p_dim):
+    def __init__(self, n_dim, p_dim, h_dim=32):
         super(DissipatedEnergy, self).__init__()
-        self.linear = Linear(n_dim, 1)
+        self.linear = Linear(n_dim, h_dim)
         self.softplus = Softplus()
 
-    def forward(self, n, p):
-        c = self.softplus(self.linear(n))
-        f = torch.sum(p ** 2, dim=1, keepdim=True)
-        return c * f
+    def forward(self, n, p, nnm):
+        root = self.linear(n)
+        c = self.softplus(root @ root.t()) * nnm
+        f = torch.sum(p * (c @ p), dim=1)
+        if torch.isnan(f.sum()):
+            f[torch.isnan(f)] = 0
+        # print('f:', f[:1])
+        return f
 
 
 class DissipativeHamiltonianDerivation(Module):
-    def __init__(self, n_dim, p_dim, q_dim, dropout=0.0):
+    def __init__(self, n_dim, p_dim, q_dim, use_cuda=False, dropout=0.0):
         super(DissipativeHamiltonianDerivation, self).__init__()
-        self.massive = Massive(n_dim)
-        self.T = KineticEnergy()
-        self.U = PotentialEnergy(q_dim, dropout=dropout)
+        self.massive = Massive(n_dim, use_cuda=use_cuda)
+        self.T = KineticEnergy(p_dim)
+        self.U = PotentialEnergy(n_dim, q_dim, dropout=dropout, use_cuda=use_cuda)
         self.F = DissipatedEnergy(n_dim, p_dim)
 
     def forward(self, n, p, q, e, mol_node_matrix, mol_node_mask, return_energy=False, dissipate=True):
+        nnm = mol_node_matrix.t() @ mol_node_matrix
         m = self.massive(n)
-        hamiltonians = self.T(p, m) + self.U(q, e)
-        dissipations = self.F(n, p)
+        hamiltonians = self.T(p, m) + self.U(n, m, q, e, nnm)
+        dissipations = self.F(n, p, nnm)
         hamilton = hamiltonians.sum()
+        # print('hamilton:', hamilton)
         dissipated = dissipations.sum()
+        # print('dissipate:', dissipate)
         dq = autograd.grad(hamilton, p, create_graph=True)[0]
         if dissipate:
             dp = -1 * (autograd.grad(hamilton, q, create_graph=True)[0] +
-                       autograd.grad(dissipated, p, create_graph=True)[0] * m.detach())
+                       autograd.grad(dissipated, p, create_graph=True)[0] * m)
         else:
             dp = -1 * autograd.grad(hamilton, q, create_graph=True)[0]
+        # print('dp:', dp[:1])
+        # print('dq:', dq[:1])
         if return_energy:
             return dp, dq, hamiltonians, dissipations
         return dp, dq

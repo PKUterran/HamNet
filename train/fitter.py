@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 import gc
+import json
 from tqdm import tqdm
 
 from .config import FITTER_CONFIG_QM9 as DEFAULT_CONFIG
@@ -15,6 +16,7 @@ from visualize.molecule import plt_molecule_3d
 from net.models import PositionEncoder
 
 GRAPH_PATH = 'graphs/pos/'
+LOG_PATH = 'logs/pos/'
 
 
 def set_seed(seed: int, use_cuda: bool):
@@ -25,7 +27,7 @@ def set_seed(seed: int, use_cuda: bool):
 
 
 def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tqdm=True, force_save=False,
-            special_config: dict = None, model_save_path: str = 'net/pe.pt'):
+            special_config: dict = None, model_save_path: str = 'net/pe.pt', tag='std'):
     cfg = DEFAULT_CONFIG.copy()
     if special_config:
         cfg.update(special_config)
@@ -67,6 +69,7 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
     current_lr = cfg['LR']
     matrix_cache = MatrixCache(cfg['MAX_DICT'])
     best_val = -1e8
+    logs = []
 
     def visualize(smiles_list, pos: torch.Tensor, fit_pos: torch.Tensor, mol_node_matrix: torch.Tensor, vis=range(5)):
         if use_cuda:
@@ -129,6 +132,7 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
         print('\t\tDistance loss: {:.4f}'.format(np.average(d_losses)))
         print('\t\tStationary loss: {:.4f}'.format(np.average(s_losses)))
         print('\t\tCentrality loss: {:.4f}'.format(np.average(c_losses)))
+        logs[-1].update({'on_train_loss': np.average(d_losses)})
 
     def evaluate(mask_list: list, name=None):
         model.eval()
@@ -158,8 +162,11 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
                 print('\t\tSaving finished!')
         print('\t\tLoss: {:.5f}'.format(np.average(losses)))
         print('\t\tDistance Loss: {:.5f}'.format(np.average(d_losses)))
+        logs[-1].update({'{}_loss'.format(name): np.average(losses)})
+        logs[-1].update({'{}_metric'.format(name): np.average(d_losses)})
 
     for epoch in range(cfg['ITERATION']):
+        logs.append({'epoch': epoch + 1})
         print('In iteration {}:'.format(epoch + 1))
         print('\tLearning rate: {:.8e}'.format(current_lr))
         print('\tTraining: ')
@@ -171,3 +178,6 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
         print('\tEvaluating test: ')
         evaluate(test_mask_list, name='test')
         gc.collect()
+        d = {'metric': 'Distance Loss', 'logs': logs}
+        with open('{}{}.json'.format(LOG_PATH, tag), 'w+', encoding='utf-8') as fp:
+            json.dump(d, fp)
