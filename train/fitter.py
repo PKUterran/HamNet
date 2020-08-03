@@ -84,7 +84,7 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
             fit_pos_i = fit_pos[node_mask == 1, :]
             new_pos_i = rotate_to(pos_i, fit_pos_i)
             plt_molecule_3d(new_pos_i.numpy(), smiles_list[i],
-                            title='fit_qm9_{}_{}'.format(epoch, i), d=GRAPH_PATH)
+                            title='fit_qm9_{}_{}_{}'.format(tag, epoch, i), d=GRAPH_PATH)
             plt_molecule_3d(fit_pos_i.numpy(), smiles_list[i],
                             title='fit_qm9_origin_{}'.format(i), d=GRAPH_PATH)
 

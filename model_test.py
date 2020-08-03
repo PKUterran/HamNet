@@ -9,21 +9,21 @@ from train.lipop_trainer import train_lipop
 from train.tox21_trainer import train_tox21
 
 fit_qm9(use_cuda=True,
-        limit=20000,
-        use_tqdm=True,
+        limit=-1,
+        use_tqdm=False,
         force_save=True,
-        special_config={'HGN_LAYERS': 20, 'DISTURB': False, 'ITERATION': 10, 'LR': 1e-3, 'DISSIPATE': True},
-        model_save_path='net/test.pt',
-        tag='new_dissipate_0731',
+        # special_config={'HGN_LAYERS': 20, 'DISTURB': False, 'ITERATION': 10, 'LR': 1e-3, 'DISSIPATE': True},
+        model_save_path='net/server0731.pt',
+        tag='new_dissipate_0731_server',
         )
-# fit_qm9(use_cuda=True,
-#         limit=20000,
-#         use_tqdm=True,
-#         force_save=False,
-#         special_config={'HGN_LAYERS': 20, 'DISTURB': False, 'ITERATION': 10, 'LR': 1e-3, 'DISSIPATE': False},
-#         model_save_path='net/test.pt',
-#         tag='new_no_dissipate_0731',
-#         )
+fit_qm9(use_cuda=True,
+        limit=-1,
+        use_tqdm=False,
+        force_save=False,
+        # special_config={'HGN_LAYERS': 20, 'DISTURB': False, 'ITERATION': 10, 'LR': 1e-3, 'DISSIPATE': False},
+        model_save_path='net/server0731-nod.pt',
+        tag='new_no_dissipate_0731_server',
+        )
 
 # train_qm9(use_cuda=True,
 #           limit=-1,

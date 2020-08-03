@@ -265,8 +265,6 @@ class PotentialEnergy(Module):
         super(PotentialEnergy, self).__init__()
         self.use_cuda = use_cuda
         self.linear1 = Linear(q_dim, h_dim, bias=True)
-        self.relu = ReLU()
-        self.linear2 = Linear(h_dim, 1, bias=True)
         self.softplus = Softplus()
 
     def forward(self, n, m, q, e, nnm):
