@@ -188,15 +188,17 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
         train(train_mask_list, name='train')
         print('\tEvaluating training: ')
         evaluate(train_mask_list, name='train',
-                 visualize='train_{}'.format(epoch + 1) if (epoch + 1) % cfg['EVAL'] == 0 else None)
+                 # visualize='train_{}'.format(epoch + 1) if (epoch + 1) % cfg['EVAL'] == 0 else None
+                 )
         print('\tEvaluating validation: ')
         evaluate(validate_mask_list, name='evaluate',
-                 visualize='val_{}'.format(epoch + 1) if (epoch + 1) % cfg['EVAL'] == 0 else None)
+                 # visualize='val_{}'.format(epoch + 1) if (epoch + 1) % cfg['EVAL'] == 0 else None
+                 )
         print('\tEvaluating test: ')
         evaluate(test_mask_list,  name='test',
-                 visualize='test' if epoch + 1 == cfg['ITERATION'] else None)
+                 # visualize='test' if epoch + 1 == cfg['ITERATION'] else None
+                 )
         gc.collect()
-
-    d = {'metric': 'RMSE', 'logs': logs}
-    with open('{}{}.json'.format(LOG_PATH, tag), 'w+', encoding='utf-8') as fp:
-        json.dump(d, fp)
+        d = {'metric': 'Multi-MAE', 'logs': logs}
+        with open('{}{}.json'.format(LOG_PATH, tag), 'w+', encoding='utf-8') as fp:
+            json.dump(d, fp)

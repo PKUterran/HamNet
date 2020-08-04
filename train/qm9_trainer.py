@@ -210,6 +210,3 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
         d = {'metric': 'Multi-MAE', 'logs': logs}
         with open('{}{}.json'.format(LOG_PATH, tag), 'w+', encoding='utf-8') as fp:
             json.dump(d, fp)
-        # if (epoch + 1) % cfg['EVAL'] == 0:
-        #     with open('{}{}-{}.json'.format(LOG_PATH, tag, epoch + 1), 'w+', encoding='utf-8') as fp:
-        #         json.dump(d, fp)
