@@ -23,14 +23,14 @@ class AMPNN(Module):
         self.layers = len(config['C_DIMS'])
         self.m_radius = config['M_RADIUS']
         self.dropout = config['DROPOUT']
-        self.position_encoder = position_encoder
+        self.position_encoder = [position_encoder]
         self.use_cuda = use_cuda
 
         in_dims = [self.h_dim] * (self.layers + 1)
         self.e_dim = e_dim
         self.FC_N = Linear(n_dim, self.h_dim, bias=True)
         self.FC_E = Linear(e_dim, self.he_dim, bias=True)
-        if self.position_encoder:
+        if self.position_encoder[0]:
             self.Ms = ModuleList([PosConcatMesPassing(in_dims[i], self.he_dim, self.pos_dim, self.c_dims[i],
                                                       dropout=self.dropout)
                                   for i in range(self.layers)])
@@ -46,9 +46,9 @@ class AMPNN(Module):
             '{}, {}, {}.'.format(edge_features.shape, len(us), len(vs))
         if edge_features.shape[0] == 0:
             edge_features = edge_features.reshape([0, self.e_dim])
-        if self.position_encoder:
-            pos_features = self.position_encoder.transform(node_features, edge_features, us, vs,
-                                                           matrix_mask_tuple, name)[0]
+        if self.position_encoder[0]:
+            pos_features = self.position_encoder[0].transform(node_features, edge_features, us, vs,
+                                                              matrix_mask_tuple, name)[0]
             uv_pos_features = pos_features[us] - pos_features[vs]
         else:
             uv_pos_features = None
@@ -59,7 +59,7 @@ class AMPNN(Module):
         for i in range(self.layers):
             u_features = node_features[us]
             v_features = node_features[vs]
-            if self.position_encoder:
+            if self.position_encoder[0]:
                 context_features, new_edge_features = self.Ms[i](u_features, v_features, edge_features, uv_pos_features,
                                                                  node_edge_matrix, node_edge_mask)
             else:
@@ -166,11 +166,13 @@ class PositionEncoder(Module):
     def transform(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list,
                   matrix_mask_tuple: tuple, name=''):
         if name and name in self.cache.keys():
+            # print('cache hit:', name)
             pq = self.cache[name]
         else:
             p, q, _, _, _, _ = self(v_features, e_features, us, vs, matrix_mask_tuple)
             pq = torch.cat([p.detach(), q.detach()], dim=1)
             if name:
+                # print('new cache:', name)
                 self.cache[name] = pq
         return pq, 0, 0
 

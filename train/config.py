@@ -67,7 +67,7 @@ MODEL_CONFIG_LIPOP.update({
     'DECAY': 1e-4,
     'DROPOUT': 0.5,
     'ITERATION': 200,
-    'BATCH': 64,
+    'BATCH': 10,
     'EVAL': 2000,
     'HE_DIM': 256,
     'C_DIMS': [256, 256, 256],

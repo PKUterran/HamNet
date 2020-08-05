@@ -47,8 +47,8 @@ from train.tox21_trainer import train_tox21
 
 train_lipop(use_cuda=True,
             limit=-1,
-            use_tqdm=False,
-            force_save=True,
+            use_tqdm=True,
+            force_save=False,
             position_encoder_path='net/server0731.pt',
             tag='pos',
             )

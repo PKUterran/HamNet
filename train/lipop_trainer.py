@@ -101,7 +101,7 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
 
         us, vs, mm_tuple = matrix_cache.fetch(molecules, mask, nfs, name, use_cuda)
 
-        embeddings, _ = model(nfs, efs, us, vs, mm_tuple)
+        embeddings, _ = model(nfs, efs, us, vs, mm_tuple, name)
         std_loss = 0
         logits = regression(embeddings)
         target = norm_properties[mask, :]
@@ -199,6 +199,6 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
                  # visualize='test' if epoch + 1 == cfg['ITERATION'] else None
                  )
         gc.collect()
-        d = {'metric': 'Multi-MAE', 'logs': logs}
+        d = {'metric': 'RMSE', 'logs': logs}
         with open('{}{}.json'.format(LOG_PATH, tag), 'w+', encoding='utf-8') as fp:
             json.dump(d, fp)
