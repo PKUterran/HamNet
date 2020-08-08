@@ -118,7 +118,7 @@ class AttentivePooling(Module):
 
 
 class AlignAttendPooling(Module):
-    def __init__(self, c_dim: int, m_dim: int, radius=2, use_cuda=False, dropout=0., use_gru=True):
+    def __init__(self, c_dim: int, m_dim: int, p_dim: int, radius=2, use_cuda=False, dropout=0., use_gru=True):
         super(AlignAttendPooling, self).__init__()
         self.use_cuda = use_cuda
         self.use_gru = use_gru
@@ -130,20 +130,29 @@ class AlignAttendPooling(Module):
             self.gru = GRUCell(c_dim, m_dim)
         else:
             self.linear = Linear(c_dim + m_dim, m_dim)
-        self.attend = Linear(c_dim, c_dim)
-        self.align = Linear(m_dim + c_dim, 1)
+        self.attend = Linear(c_dim + p_dim, c_dim)
+        self.align = Linear(m_dim + c_dim + p_dim, 1)
         self.softmax = Softmax(dim=1)
         self.elu = ELU()
         self.relu2 = ReLU()
         self.dropout = Dropout(p=dropout)
 
-    def forward(self, node_features: torch.Tensor, mol_node_matrix: torch.Tensor, mol_node_mask: torch.Tensor) \
+    def forward(self, node_features: torch.Tensor, pos_features: torch.Tensor,
+                mol_node_matrix: torch.Tensor, mol_node_mask: torch.Tensor) \
             -> (torch.Tensor, torch.Tensor):
         mol_features = mol_node_matrix @ self.relu(self.map(node_features))
 
         for i in range(self.radius):
-            h = self.attend(self.dropout(node_features))
-            a = self.relu1(self.align(torch.cat([mol_node_matrix.t() @ mol_features, node_features], dim=-1)))
+            if pos_features is not None:
+                # print(node_features.shape)
+                # print(pos_features.shape)
+                h = self.attend(self.dropout(torch.cat([node_features, pos_features], dim=-1)))
+                a = self.relu1(self.align(torch.cat([mol_node_matrix.t() @ mol_features, pos_features, node_features],
+                                                    dim=-1)))
+            else:
+                h = self.attend(self.dropout(node_features))
+                a = self.relu1(self.align(torch.cat([mol_node_matrix.t() @ mol_features, node_features],
+                                                    dim=-1)))
             d = a.view([-1]).diag()
             mol_node_weight = self.softmax(mol_node_matrix @ d + mol_node_mask)
             context = self.elu(mol_node_weight @ h)
@@ -156,7 +165,8 @@ class AlignAttendPooling(Module):
 
 
 class GraphConvolutionLayer(Module):
-    def __init__(self, i_dim: int, o_dim: int, h_dims: list = list((128,)), activation=None, dropout=0.0):
+    def __init__(self, i_dim: int, o_dim: int, h_dims: list = list((128,)),
+                 activation=None, dropout=0.0, residual=False):
         super(GraphConvolutionLayer, self).__init__()
         in_dims = [i_dim] + h_dims
         out_dims = h_dims + [o_dim]
@@ -164,13 +174,19 @@ class GraphConvolutionLayer(Module):
         self.relu = LeakyReLU()
         self.activation = activation
         self.dropout = Dropout(dropout)
+        self.residual = residual
 
     def forward(self, x: torch.Tensor, a: torch.Tensor):
-        h = self.dropout(x)
+        hs = [self.dropout(x)]
         for i, linear in enumerate(self.linears):
-            h = a @ linear(h)
+            h = a @ linear(hs[i])
             if i < len(self.linears) - 1:
                 h = self.relu(h)
+            hs.append(h)
+        if self.residual:
+            h = torch.cat(hs, dim=-1)
+        else:
+            h = hs[-1]
         if self.activation == 'tanh':
             h = torch.tanh(h)
         elif not self.activation:
@@ -186,9 +202,9 @@ class LstmPQEncoder(Module):
         self.use_cuda = use_cuda
         self.disturb = disturb
         self.pq_dim = pq_dim
-        self.gcl = GraphConvolutionLayer(in_dim, h_dim, h_dims=[])
+        self.gcl = GraphConvolutionLayer(in_dim, h_dim, h_dims=[h_dim], residual=True)
         self.relu = ELU()
-        self.rnn = LSTM(h_dim, 2 * pq_dim, num_layers)
+        self.rnn = LSTM(in_dim + h_dim * 2, 2 * pq_dim, num_layers)
 
     def forward(self, node_features: torch.Tensor, mol_mode_matrix: torch.Tensor, e: torch.Tensor) \
             -> (torch.Tensor, torch.Tensor):
@@ -204,10 +220,10 @@ class LstmPQEncoder(Module):
                 d = d.cuda()
             ret = ret + d
         ret = ret - torch.sum(ret, dim=0) / ret.shape[0]
-        try:
-            ret = ret / torch.sqrt(torch.sum(ret ** 2, dim=0) / ret.shape[0])
-        except:
-            pass
+        # try:
+        #     ret = ret / torch.sqrt(torch.sum(ret ** 2, dim=0) / ret.shape[0])
+        # except:
+        #     pass
         return ret[:, :self.pq_dim], ret[:, self.pq_dim:]
 
 

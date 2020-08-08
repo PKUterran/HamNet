@@ -14,23 +14,30 @@ from utils.func import re_index
 
 
 class AMPNN(Module):
-    def __init__(self, n_dim: int, e_dim: int, config, position_encoder=None, use_cuda=False):
+    def __init__(self, n_dim: int, e_dim: int, config, position_encoder=None, use_pos=False, use_cuda=False):
         super(AMPNN, self).__init__()
         self.h_dim = config['F_DIM']
         self.c_dims = config['C_DIMS']
         self.he_dim = config['HE_DIM']
-        self.pos_dim = config['POS_DIM']
         self.layers = len(config['C_DIMS'])
         self.m_radius = config['M_RADIUS']
         self.dropout = config['DROPOUT']
-        self.position_encoder = [position_encoder]
+        self.position_encoders = [position_encoder]
+        self.use_pos = use_pos
         self.use_cuda = use_cuda
+        assert not (use_pos and position_encoder)
+        if use_pos:
+            self.pos_dim = 3
+        elif position_encoder:
+            self.pos_dim = config['POS_DIM']
+        else:
+            self.pos_dim = 0
 
         in_dims = [self.h_dim] * (self.layers + 1)
         self.e_dim = e_dim
         self.FC_N = Linear(n_dim, self.h_dim, bias=True)
         self.FC_E = Linear(e_dim, self.he_dim, bias=True)
-        if self.position_encoder[0]:
+        if self.position_encoders[0] or self.use_pos:
             self.Ms = ModuleList([PosConcatMesPassing(in_dims[i], self.he_dim, self.pos_dim, self.c_dims[i],
                                                       dropout=self.dropout)
                                   for i in range(self.layers)])
@@ -38,7 +45,8 @@ class AMPNN(Module):
             self.Ms = ModuleList([ConcatMesPassing(in_dims[i], self.he_dim, self.c_dims[i], dropout=self.dropout)
                                   for i in range(self.layers)])
         self.Us = ModuleList([GRUAggregation(self.c_dims[i], in_dims[i]) for i in range(self.layers)])
-        self.R = AlignAttendPooling(in_dims[-1], in_dims[-1], self.m_radius, use_cuda, dropout=self.dropout)
+        self.R = AlignAttendPooling(in_dims[-1], in_dims[-1], self.pos_dim,
+                                    radius=self.m_radius, use_cuda=use_cuda, dropout=self.dropout)
 
     def forward(self, node_features: torch.Tensor, edge_features: torch.Tensor, us: list, vs: list,
                 matrix_mask_tuple: tuple, name: str = '') -> (torch.Tensor, torch.Tensor):
@@ -46,11 +54,22 @@ class AMPNN(Module):
             '{}, {}, {}.'.format(edge_features.shape, len(us), len(vs))
         if edge_features.shape[0] == 0:
             edge_features = edge_features.reshape([0, self.e_dim])
-        if self.position_encoder[0]:
-            pos_features = self.position_encoder[0].transform(node_features, edge_features, us, vs,
-                                                              matrix_mask_tuple, name)[0]
+        if self.position_encoders[0]:
+            pos_features = self.position_encoders[0].transform(node_features, edge_features, us, vs,
+                                                               matrix_mask_tuple, name)[0]
             uv_pos_features = pos_features[us] - pos_features[vs]
+        elif self.use_pos:
+            pos_features = node_features[:, -3:]
+            uv_pos_features = pos_features[us] - pos_features[vs]
+            node_len = node_features.shape[-1]
+            temp_mask = torch.tensor([1] * (node_len - 3) + [0] * 3, dtype=torch.float32)
+            if self.use_cuda:
+                temp_mask = temp_mask.cuda()
+            node_features = node_features * temp_mask
+            # print(node_features.shape)
+            # print(pos_features.shape)
         else:
+            pos_features = None
             uv_pos_features = None
         node_features = F.leaky_relu(self.FC_N(node_features))
         edge_features = F.leaky_relu(self.FC_E(edge_features))
@@ -59,10 +78,11 @@ class AMPNN(Module):
         for i in range(self.layers):
             u_features = node_features[us]
             v_features = node_features[vs]
-            if self.position_encoder[0]:
+            if self.position_encoders[0] or self.use_pos:
                 context_features, new_edge_features = self.Ms[i](u_features, v_features, edge_features, uv_pos_features,
                                                                  node_edge_matrix, node_edge_mask)
             else:
+                assert not pos_features
                 assert not uv_pos_features
                 context_features, new_edge_features = self.Ms[i](u_features, v_features, edge_features,
                                                                  node_edge_matrix, node_edge_mask)
@@ -73,7 +93,7 @@ class AMPNN(Module):
             node_features = new_node_features
             edge_features = new_edge_features
 
-        readout, a = self.R(node_features, mol_node_matrix, mol_node_mask)
+        readout, a = self.R(node_features, pos_features, mol_node_matrix, mol_node_mask)
         return readout, a
 
     @staticmethod
@@ -141,27 +161,41 @@ class PositionEncoder(Module):
         s_loss = sum(s_losses)
         c_loss = sum(c_losses)
         # self.verbose_print(ps, qs, mol_node_matrix, node_edge_matrix, us, vs, verbose)
+        # final_p = ps[-1]
+        # final_q = qs[-1]
+        final_p = sum(ps) / len(ps)
+        final_q = sum(qs) / len(qs)
 
-        return ps[-1], qs[-1], s_loss, c_loss, h, d
+        return final_p, final_q, s_loss, c_loss, h, d
 
     def fit(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list,
             matrix_mask_tuple: tuple, fit_pos: torch.Tensor, print_mode=False):
         _, q, s_loss, c_loss, h, d = self(v_features, e_features, us, vs, matrix_mask_tuple)
         pos = self.dn23(q)
         mol_node_matrix = matrix_mask_tuple[0]
+        node_edge_matrix = matrix_mask_tuple[2]
+
+        # 3-adj loss
+        adj = node_edge_matrix @ node_edge_matrix.t()
+        adj3 = adj @ adj @ adj
+        adj3_mask = adj3
+
+        # distance loss
         norm_mnm = mol_node_matrix / mol_node_matrix.sum(dim=1).unsqueeze(-1)
         dis_mask = norm_mnm.t() @ norm_mnm
+
         dis = (pos.unsqueeze(0) - pos.unsqueeze(1)).norm(dim=2)
         fit_dis = (fit_pos.unsqueeze(0) - fit_pos.unsqueeze(1)).norm(dim=2)
-        d_loss = ((dis - fit_dis) * dis_mask).pow(2).sum() / mol_node_matrix.shape[0]
+        dis_loss = ((dis - fit_dis) * dis_mask).pow(2).sum() / mol_node_matrix.shape[0]
+        adj3_loss = ((dis - fit_dis) * adj3_mask).pow(2).sum() / mol_node_matrix.shape[0]
         if print_mode:
-            if 'cpu' in dir(h):
-                print(h.cpu().detach().numpy()[:8])
-                print(d.cpu().detach().numpy()[:8])
+            # if 'cpu' in dir(h):
+            #     print(h.cpu().detach().numpy()[:8])
+            #     print(d.cpu().detach().numpy()[:8])
             print(dis_mask.cpu().detach().numpy()[:8, :8])
             print(dis.cpu().detach().numpy()[:8, :8])
             print(fit_dis.cpu().detach().numpy()[:8, :8])
-        return d_loss, s_loss, c_loss, pos
+        return dis_loss, adj3_loss, s_loss, c_loss, pos
 
     def transform(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list,
                   matrix_mask_tuple: tuple, name=''):

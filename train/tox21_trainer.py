@@ -3,6 +3,7 @@ import torch
 import torch.optim as optim
 import gc
 import os
+import json
 from torch.nn import BCELoss
 from itertools import chain
 from tqdm import tqdm
@@ -16,6 +17,7 @@ from utils.cache import MatrixCache
 from net.models import MLP, AMPNN
 from visualize.regress import plt_multiple_scatter
 
+LOG_PATH = 'logs/TOX21/'
 TOX21_GRAPH_PATH = 'graphs/TOX21/'
 
 
@@ -28,7 +30,7 @@ def set_seed(seed: int, use_cuda: bool):
 
 def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tqdm=True,
                 force_save=False, special_config: dict = None,
-                position_encoder_path: str = 'net/pe.pt', dataset='TOX21'):
+                position_encoder_path: str = 'net/pe.pt', dataset='TOX21', tag='std'):
     cfg = DEFAULT_CONFIG.copy()
     if special_config:
         cfg.update(special_config)
@@ -92,6 +94,7 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
     current_lr = cfg['LR']
     matrix_cache = MatrixCache(cfg['MAX_DICT'])
     loss_fuc = BCELoss()
+    logs = []
 
     def forward(mask: list, name=None) -> (torch.Tensor, torch.Tensor, torch.Tensor):
         nfs = torch.cat([molecules[i].node_features for i in mask])
@@ -102,7 +105,7 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
 
         us, vs, mm_tuple = matrix_cache.fetch(molecules, mask, nfs, name, use_cuda)
 
-        embeddings, _ = model(nfs, efs, us, vs, mm_tuple)
+        embeddings, _ = model(nfs, efs, us, vs, mm_tuple, name)
         std_loss = 0
         logits = classifier(embeddings) * not_nan[mask, :]
         target = properties[mask, :]
@@ -134,6 +137,7 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
             current_lr *= 1 - cfg['DECAY']
 
         print('\t\tSemi-supervised loss: {:.4f}'.format(np.average(u_losses)))
+        logs[-1].update({'on_train_loss': np.average(u_losses)})
 
     def calc_masked_roc(logits, target, mask) -> float:
         rocs = []
@@ -175,10 +179,14 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
         all_target = np.vstack(target_list)
         # print(all_logits[: 10])
         # print(all_target[: 10])
+        roc = calc_masked_roc(all_logits, all_target, mask)
         print('\t\tLoss: {:.3f}'.format(np.average(losses)))
-        print('\t\tROC: {:.3f}'.format(calc_masked_roc(all_logits, all_target, mask)))
+        print('\t\tROC: {:.3f}'.format(roc))
+        logs[-1].update({'{}_loss'.format(name): np.average(losses)})
+        logs[-1].update({'{}_metric'.format(name): roc})
 
     for epoch in range(cfg['ITERATION']):
+        logs.append({'epoch': epoch + 1})
         print('In iteration {}:'.format(epoch + 1))
         print('\tLearning rate: {:.8e}'.format(current_lr))
         print('\tTraining: ')
@@ -190,6 +198,6 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
         print('\tEvaluating test: ')
         evaluate(test_mask_list)
         gc.collect()
-
-    # print(model.total_forward_time)
-    # print(model.layer_forward_time)
+        d = {'metric': 'Multi-ROC', 'logs': logs}
+        with open('{}{}.json'.format(LOG_PATH, tag), 'w+', encoding='utf-8') as fp:
+            json.dump(d, fp)

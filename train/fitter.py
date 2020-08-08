@@ -99,14 +99,16 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
 
         us, vs, mm_tuple = matrix_cache.fetch(molecules, mask, nfs, name, use_cuda)
 
-        d_loss, s_loss, c_loss, pos = model.fit(nfs, efs, us, vs, mm_tuple, atom_pos, print_mode=name == 'test0')
+        dis_loss, adj3_loss, s_loss, c_loss, pos = model.fit(nfs, efs, us, vs, mm_tuple, atom_pos,
+                                                             print_mode=name == 'test0')
         if name == 'test0':
             visualize([smiles[i] for i in mask], pos, atom_pos, mm_tuple[0])
-        return d_loss, s_loss, c_loss
+        return dis_loss, adj3_loss, s_loss, c_loss
 
     def train(mask_list: list, name=None):
         model.train()
         d_losses = []
+        a_losses = []
         s_losses = []
         c_losses = []
 
@@ -119,17 +121,20 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
             else:
                 name_ = None
             optimizer.zero_grad()
-            d_loss, s_loss, c_loss = forward(m, name=name_)
+            d_loss, a_loss, s_loss, c_loss = forward(m, name=name_)
             d_losses.append(d_loss.cpu().item() if 'cpu' in dir(d_loss) else d_loss)
+            a_losses.append(a_loss.cpu().item() if 'cpu' in dir(a_loss) else a_loss)
             s_losses.append(s_loss.cpu().item() if 'cpu' in dir(s_loss) else s_loss)
             c_losses.append(c_loss.cpu().item() if 'cpu' in dir(c_loss) else c_loss)
-            loss = d_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
+            # loss = d_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
+            loss = a_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
             loss.backward()
             optimizer.step()
             nonlocal current_lr
             current_lr *= 1 - cfg['DECAY']
 
         print('\t\tDistance loss: {:.4f}'.format(np.average(d_losses)))
+        print('\t\tADJ3 loss: {:.4f}'.format(np.average(a_losses)))
         print('\t\tStationary loss: {:.4f}'.format(np.average(s_losses)))
         print('\t\tCentrality loss: {:.4f}'.format(np.average(c_losses)))
         logs[-1].update({'on_train_loss': np.average(d_losses)})
@@ -147,8 +152,9 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
                 name_ = name + str(i)
             else:
                 name_ = None
-            d_loss, s_loss, c_loss = forward(m, name=name_)
-            loss = d_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
+            d_loss, a_loss, s_loss, c_loss = forward(m, name=name_)
+            # loss = d_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
+            loss = a_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
             losses.append(loss.cpu().item())
             d_losses.append(d_loss.cpu().item())
 

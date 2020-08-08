@@ -13,7 +13,7 @@ FITTER_CONFIG = {
     'BATCH': 32,
 
     'HGN_LAYERS': 20,
-    'TAU': 0.05,
+    'TAU': 0.01,
     'PQ_DIM': 32,
     'GAMMA_S': 0.000,
     'GAMMA_C': 0.000,
@@ -78,8 +78,12 @@ MODEL_CONFIG_LIPOP.update({
 MODEL_CONFIG_TOX21 = MODEL_CONFIG.copy()
 MODEL_CONFIG_TOX21.update({
     'LR': 2e-4,
-    'DECAY': 5e-5,
-    'BATCH': 64,
+    'DECAY': 4e-5,
+    'DROPOUT': 0.5,
+    'ITERATION': 200,
+    'BATCH': 10,
+    'EVAL': 2000,
+    'M_RADIUS': 4,
 })
 
 

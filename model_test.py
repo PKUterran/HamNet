@@ -11,14 +11,6 @@ from train.tox21_trainer import train_tox21
 # fit_qm9(use_cuda=True,
 #         limit=-1,
 #         use_tqdm=False,
-#         force_save=True,
-#         # special_config={'HGN_LAYERS': 20, 'DISTURB': False, 'ITERATION': 10, 'LR': 1e-3, 'DISSIPATE': True},
-#         model_save_path='net/server0731.pt',
-#         tag='new_dissipate_0731_server',
-#         )
-# fit_qm9(use_cuda=True,
-#         limit=-1,
-#         use_tqdm=False,
 #         force_save=False,
 #         # special_config={'HGN_LAYERS': 20, 'DISTURB': False, 'ITERATION': 10, 'LR': 1e-3, 'DISSIPATE': False},
 #         model_save_path='net/server0731-nod.pt',
@@ -26,14 +18,52 @@ from train.tox21_trainer import train_tox21
 #         )
 
 # train_qm9(use_cuda=True,
-#           limit=-1,
-#           use_tqdm=False,
+#           limit=20000,
+#           use_tqdm=True,
 #           use_pos=False,
 #           force_save=True,
-#           special_config={'DROPOUT': 0.5},
+#           special_config={'LR': 10 ** -4, 'DECAY': 10 ** -5, 'ITERATION': 50},
 #           position_encoder_path='',
-#           tag='qm9_dropout5_nopos'
+#           tag='qm9_nopos'
 #           )
+train_qm9(use_cuda=True,
+          limit=-1,
+          use_tqdm=False,
+          use_pos=False,
+          force_save=True,
+          # special_config={'LR': 10 ** -4, 'DECAY': 10 ** -5, 'ITERATION': 25},
+          position_encoder_path='',
+          tag='qm9_nopos'
+          )
+train_qm9(use_cuda=True,
+          limit=-1,
+          use_tqdm=False,
+          use_pos=True,
+          force_save=True,
+          # special_config={'LR': 10 ** -4, 'DECAY': 10 ** -5, 'ITERATION': 25},
+          position_encoder_path='',
+          tag='qm9_3pos'
+          )
+fit_qm9(use_cuda=True,
+        limit=-1,
+        use_tqdm=False,
+        force_save=True,
+        # special_config={'HGN_LAYERS': 0, 'TAU': 0.01, 'DISTURB': False, 'ITERATION': 10,
+        #                 'LR': 1e-3, 'DISSIPATE': True,
+        #                 'GAMMA_S': 0e-2, 'GAMMA_A': 0e-0,
+        #                 },
+        model_save_path='net/server0808.pt',
+        tag='0808',
+        )
+train_qm9(use_cuda=True,
+          limit=-1,
+          use_tqdm=False,
+          use_pos=False,
+          force_save=True,
+          # special_config={'LR': 10 ** -4, 'DECAY': 10 ** -5, 'ITERATION': 25},
+          position_encoder_path='net/server0808.pt',
+          tag='qm9_pos'
+          )
 #
 # train_qm9(use_cuda=True,
 #           limit=-1,
@@ -45,26 +75,34 @@ from train.tox21_trainer import train_tox21
 #           tag='qm9_dropout5_pos'
 #           )
 
-train_lipop(use_cuda=True,
-            limit=-1,
-            use_tqdm=True,
-            force_save=False,
-            position_encoder_path='net/server0731.pt',
-            tag='pos',
-            )
-train_lipop(use_cuda=True,
-            limit=-1,
-            use_tqdm=False,
-            force_save=False,
-            position_encoder_path='',
-            tag='nopos',
-            )
+# train_lipop(use_cuda=True,
+#             limit=-1,
+#             use_tqdm=True,
+#             force_save=False,
+#             position_encoder_path='net/server0731.pt',
+#             tag='pos',
+#             )
+# train_lipop(use_cuda=True,
+#             limit=-1,
+#             use_tqdm=False,
+#             force_save=False,
+#             position_encoder_path='',
+#             tag='nopos',
+#             )
 
 # train_tox21(use_cuda=True,
 #             limit=-1,
 #             use_tqdm=False,
 #             force_save=True,
-#             position_encoder_path='net/server.pt',
+#             position_encoder_path='net/server0731.pt',
+#             tag='pos',
+#             )
+# train_tox21(use_cuda=True,
+#             limit=-1,
+#             use_tqdm=False,
+#             force_save=True,
+#             position_encoder_path='',
+#             tag='nopos',
 #             )
 
 # train_hiv(use_cuda=True,
