@@ -7,7 +7,7 @@ from itertools import chain
 from functools import reduce
 from numpy.linalg import norm
 
-from .layers import ConcatMesPassing, PosConcatMesPassing, GRUAggregation, AlignAttendPooling, \
+from .layers import ConcatMesPassing, PosConcatMesPassing, MolGATMesPassing, GRUAggregation, AlignAttendPooling, \
     HamiltonianDerivation, DissipativeHamiltonianDerivation, LstmPQEncoder
 from visualize.trajectory import plt_trajectory
 from utils.func import re_index
@@ -37,13 +37,16 @@ class AMPNN(Module):
         self.e_dim = e_dim
         self.FC_N = Linear(n_dim, self.h_dim, bias=True)
         self.FC_E = Linear(e_dim, self.he_dim, bias=True)
-        if self.position_encoders[0] or self.use_pos:
-            self.Ms = ModuleList([PosConcatMesPassing(in_dims[i], self.he_dim, self.pos_dim, self.c_dims[i],
-                                                      dropout=self.dropout)
-                                  for i in range(self.layers)])
-        else:
-            self.Ms = ModuleList([ConcatMesPassing(in_dims[i], self.he_dim, self.c_dims[i], dropout=self.dropout)
-                                  for i in range(self.layers)])
+        # if self.position_encoders[0] or self.use_pos:
+        #     self.Ms = ModuleList([PosConcatMesPassing(in_dims[i], self.he_dim, self.pos_dim, self.c_dims[i],
+        #                                               dropout=self.dropout)
+        #                           for i in range(self.layers)])
+        # else:
+        #     self.Ms = ModuleList([ConcatMesPassing(in_dims[i], self.he_dim, self.c_dims[i], dropout=self.dropout)
+        #                           for i in range(self.layers)])
+        self.Ms = ModuleList([MolGATMesPassing(in_dims[i], self.he_dim, self.pos_dim, self.c_dims[i],
+                                               dropout=self.dropout)
+                              for i in range(self.layers)])
         self.Us = ModuleList([GRUAggregation(self.c_dims[i], in_dims[i]) for i in range(self.layers)])
         self.R = AlignAttendPooling(in_dims[-1], in_dims[-1], self.pos_dim,
                                     radius=self.m_radius, use_cuda=use_cuda, dropout=self.dropout)
@@ -78,14 +81,16 @@ class AMPNN(Module):
         for i in range(self.layers):
             u_features = node_features[us]
             v_features = node_features[vs]
-            if self.position_encoders[0] or self.use_pos:
-                context_features, new_edge_features = self.Ms[i](u_features, v_features, edge_features, uv_pos_features,
-                                                                 node_edge_matrix, node_edge_mask)
-            else:
-                assert not pos_features
-                assert not uv_pos_features
-                context_features, new_edge_features = self.Ms[i](u_features, v_features, edge_features,
-                                                                 node_edge_matrix, node_edge_mask)
+            # if self.position_encoders[0] or self.use_pos:
+            #     context_features, new_edge_features = self.Ms[i](u_features, v_features, edge_features,
+            #                                                      uv_pos_features, node_edge_matrix, node_edge_mask)
+            # else:
+            #     assert not pos_features
+            #     assert not uv_pos_features
+            #     context_features, new_edge_features = self.Ms[i](u_features, v_features, edge_features,
+            #                                                      node_edge_matrix, node_edge_mask)
+            context_features, new_edge_features = self.Ms[i](u_features, v_features, edge_features, uv_pos_features,
+                                                             node_edge_matrix, node_edge_mask)
             new_node_features = self.Us[i](node_features, context_features)
 
             if i != self.layers - 1:

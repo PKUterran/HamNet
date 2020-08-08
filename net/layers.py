@@ -8,6 +8,43 @@ from itertools import chain
 from data.encode import get_default_atoms_massive_matrix
 
 
+class MolGATMesPassing(Module):
+    def __init__(self, n_dim: int, e_dim: int, p_dim: int, c_dim: int, dropout=0.):
+        super(MolGATMesPassing, self).__init__()
+        self.linear = Linear(n_dim + p_dim + n_dim, c_dim, bias=True)
+        self.linear_e = Linear(n_dim + p_dim + n_dim, e_dim, bias=True)
+        self.relu1 = LeakyReLU()
+        self.relu2 = LeakyReLU()
+        self.relu_e = LeakyReLU()
+        self.attention = Linear(e_dim + p_dim, 1, bias=True)
+        self.softmax = Softmax(dim=1)
+        self.elu = ELU()
+        self.dropout = Dropout(p=dropout)
+
+    def forward(self, u_features: torch.Tensor, v_features: torch.Tensor,
+                edge_features: torch.Tensor, pos_features: torch.Tensor,
+                node_edge_matrix: torch.Tensor, node_edge_mask: torch.Tensor) -> (torch.Tensor, torch.Tensor):
+        if pos_features is not None:
+            u_p_v_features = torch.cat([u_features, pos_features, v_features], dim=1)
+        else:
+            u_p_v_features = torch.cat([u_features, v_features], dim=1)
+        if u_p_v_features.shape[0]:
+            u_p_v_features = self.dropout(u_p_v_features)
+        new_edge_features = self.relu_e(self.linear_e(u_p_v_features))
+        neighbor_features = self.relu1(self.linear(u_p_v_features))
+        if neighbor_features.shape[0]:
+            neighbor_features = self.dropout(neighbor_features)
+        if pos_features is not None:
+            a = self.relu2(self.attention(torch.cat([edge_features, pos_features], dim=1)))
+        else:
+            a = self.relu2(self.attention(edge_features))
+        d = a.view([-1]).diag()
+        node_edge_weight = node_edge_matrix @ d + node_edge_mask
+        node_edge_weight = self.softmax(node_edge_weight)
+        context_features = self.elu(node_edge_weight @ neighbor_features)
+        return context_features, new_edge_features
+
+
 class ConcatMesPassing(Module):
     def __init__(self, n_dim: int, e_dim: int, c_dim: int, dropout=0.):
         super(ConcatMesPassing, self).__init__()
