@@ -26,44 +26,55 @@ from train.tox21_trainer import train_tox21
 #           position_encoder_path='',
 #           tag='qm9_nopos'
 #           )
-# train_qm9(use_cuda=True,
-#           limit=20000,
-#           use_tqdm=True,
-#           use_pos=False,
-#           force_save=True,
-#           special_config={'LR': 10 ** -4, 'DECAY': 10 ** -4.4, 'ITERATION': 50},
-#           position_encoder_path='',
-#           tag='qm9-small_nopos'
-#           )
-# train_qm9(use_cuda=True,
-#           limit=20000,
-#           use_tqdm=True,
-#           use_pos=True,
-#           force_save=True,
-#           special_config={'LR': 10 ** -4, 'DECAY': 10 ** -4.4, 'ITERATION': 50},
-#           position_encoder_path='',
-#           tag='qm9-small_3pos'
-#           )
-# fit_qm9(use_cuda=True,
-#         limit=-1,
-#         use_tqdm=False,
-#         force_save=True,
-#         # special_config={'HGN_LAYERS': 0, 'TAU': 0.01, 'DISTURB': False, 'ITERATION': 10,
-#         #                 'LR': 1e-3, 'DISSIPATE': True,
-#         #                 'GAMMA_S': 0e-2, 'GAMMA_A': 0e-0,
-#         #                 },
-#         model_save_path='net/server0808.pt',
-#         tag='0808',
-#         )
 train_qm9(use_cuda=True,
           limit=20000,
           use_tqdm=True,
           use_pos=False,
           force_save=True,
           special_config={'LR': 10 ** -4, 'DECAY': 10 ** -4.4, 'ITERATION': 50},
-          position_encoder_path='net/test0808.pt',
-          tag='qm9-small_pos'
+          position_encoder_path='',
+          tag='qm9-small_nopos2'
           )
+train_qm9(use_cuda=True,
+          limit=20000,
+          use_tqdm=True,
+          use_pos=True,
+          force_save=True,
+          special_config={'LR': 10 ** -4, 'DECAY': 10 ** -4.4, 'ITERATION': 50},
+          position_encoder_path='',
+          tag='qm9-small_3pos2'
+          )
+# fit_qm9(use_cuda=True,
+#         limit=20000,
+#         use_tqdm=True,
+#         force_save=True,
+#         special_config={'HGN_LAYERS': 20, 'TAU': 0.01, 'DISTURB': False, 'ITERATION': 10,
+#                         'LR': 1e-3, 'DISSIPATE': True,
+#                         'GAMMA_S': 0e-2, 'GAMMA_A': 0e-0,
+#                         },
+#         model_save_path='net/test0808-dis.pt',
+#         tag='test-dis',
+#         )
+# fit_qm9(use_cuda=True,
+#         limit=20000,
+#         use_tqdm=True,
+#         force_save=True,
+#         special_config={'HGN_LAYERS': 20, 'TAU': 0.01, 'DISTURB': False, 'ITERATION': 10,
+#                         'LR': 1e-3, 'DISSIPATE': False,
+#                         'GAMMA_S': 0e-2, 'GAMMA_A': 0e-0,
+#                         },
+#         model_save_path='net/test0808-nodis.pt',
+#         tag='test-nodis',
+#         )
+# train_qm9(use_cuda=True,
+#           limit=20000,
+#           use_tqdm=True,
+#           use_pos=False,
+#           force_save=True,
+#           special_config={'LR': 10 ** -4, 'DECAY': 10 ** -4.4, 'ITERATION': 50},
+#           position_encoder_path='net/test0808.pt',
+#           tag='qm9-small_pos'
+#           )
 #
 # train_qm9(use_cuda=True,
 #           limit=-1,

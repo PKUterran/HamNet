@@ -1,6 +1,6 @@
 # import numpy as np
 # import pandas as pd
-import torch
+# import torch
 # from visualize.trajectory import plt_trajectory
 #
 # a = np.array([[1, 2], [1, 3], [2, 3], [8, 3], [5, 3]])
@@ -14,13 +14,13 @@ import torch
 # dis_mask = norm_mnm.t() @ norm_mnm
 # print(dis_mask.pow(2).sum().numpy())
 
-m = torch.tensor([[1], [2]], dtype=torch.float32)
-mm = m * m.reshape([1, -1])
-print(mm)
-q = mm
-t = (torch.unsqueeze(q, dim=0) - torch.unsqueeze(q, dim=1)) @ torch.tensor([[1], [1]], dtype=torch.float32)
-print(t)
-print(t.squeeze(2))
+# m = torch.tensor([[1], [2]], dtype=torch.float32)
+# mm = m * m.reshape([1, -1])
+# print(mm)
+# q = mm
+# t = (torch.unsqueeze(q, dim=0) - torch.unsqueeze(q, dim=1)) @ torch.tensor([[1], [1]], dtype=torch.float32)
+# print(t)
+# print(t.squeeze(2))
 # e = torch.norm(torch.unsqueeze(q, dim=0) - torch.unsqueeze(q, dim=1), dim=2)
 # print(e ** -12)
 # ret = torch.tensor([[1, 3], [0, 1]], dtype=torch.float32)
@@ -91,3 +91,18 @@ print(t.squeeze(2))
 # from data.reader import load_qm9
 # s, i, p = load_qm9(10, force_save=True, use_pos=True)
 # print(i[1]['nf'])
+
+
+import torch
+
+nem = torch.tensor([[1, 0, 1], [1, 1, 0], [0, 1, 1]], dtype=torch.float32)
+n = torch.tensor([[1, 6], [4, 3], [5, 2]], dtype=torch.float32)
+n_num = nem.shape[0]
+e_num = nem.shape[1]
+eye = torch.eye(e_num)
+m = eye.expand([n_num, e_num, e_num])
+e_ = nem.unsqueeze(1).expand([n_num, e_num, e_num])
+e1 = e_ * m
+a = e1 @ n
+t = torch.max(a, dim=-2)[0]
+print(t)

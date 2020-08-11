@@ -42,10 +42,13 @@ class AMPNN(Module):
         #                                               dropout=self.dropout)
         #                           for i in range(self.layers)])
         # else:
-        #     self.Ms = ModuleList([ConcatMesPassing(in_dims[i], self.he_dim, self.c_dims[i], dropout=self.dropout)
+        #     #     self.Ms = ModuleList([ConcatMesPassing(in_dims[i], self.he_dim, self.c_dims[i], dropout=self.dropout)
+        #     #                           for i in range(self.layers)])
+        #     self.Ms = ModuleList([MolGATMesPassing(in_dims[i], self.he_dim, self.pos_dim, self.c_dims[i],
+        #                                            dropout=self.dropout, use_cuda=use_cuda)
         #                           for i in range(self.layers)])
         self.Ms = ModuleList([MolGATMesPassing(in_dims[i], self.he_dim, self.pos_dim, self.c_dims[i],
-                                               dropout=self.dropout)
+                                               dropout=self.dropout, use_cuda=use_cuda)
                               for i in range(self.layers)])
         self.Us = ModuleList([GRUAggregation(self.c_dims[i], in_dims[i]) for i in range(self.layers)])
         self.R = AlignAttendPooling(in_dims[-1], in_dims[-1], self.pos_dim,
@@ -57,7 +60,7 @@ class AMPNN(Module):
             '{}, {}, {}.'.format(edge_features.shape, len(us), len(vs))
         if edge_features.shape[0] == 0:
             edge_features = edge_features.reshape([0, self.e_dim])
-        if self.position_encoders[0]:
+        if self.position_encoders[0] is not None:
             pos_features = self.position_encoders[0].transform(node_features, edge_features, us, vs,
                                                                matrix_mask_tuple, name)[0]
             uv_pos_features = pos_features[us] - pos_features[vs]
@@ -69,8 +72,9 @@ class AMPNN(Module):
             if self.use_cuda:
                 temp_mask = temp_mask.cuda()
             node_features = node_features * temp_mask
-            # print(node_features.shape)
-            # print(pos_features.shape)
+            # print(node_features)
+            # print(pos_features)
+            # exit(1)
         else:
             pos_features = None
             uv_pos_features = None

@@ -9,7 +9,7 @@ from data.encode import get_default_atoms_massive_matrix
 
 
 class MolGATMesPassing(Module):
-    def __init__(self, n_dim: int, e_dim: int, p_dim: int, c_dim: int, dropout=0.):
+    def __init__(self, n_dim: int, e_dim: int, p_dim: int, c_dim: int, dropout=0., use_cuda=False):
         super(MolGATMesPassing, self).__init__()
         self.linear = Linear(n_dim + p_dim + n_dim, c_dim, bias=True)
         self.linear_e = Linear(n_dim + p_dim + n_dim, e_dim, bias=True)
@@ -20,6 +20,7 @@ class MolGATMesPassing(Module):
         self.softmax = Softmax(dim=1)
         self.elu = ELU()
         self.dropout = Dropout(p=dropout)
+        self.use_cuda = use_cuda
 
     def forward(self, u_features: torch.Tensor, v_features: torch.Tensor,
                 edge_features: torch.Tensor, pos_features: torch.Tensor,
@@ -42,7 +43,22 @@ class MolGATMesPassing(Module):
         node_edge_weight = node_edge_matrix @ d + node_edge_mask
         node_edge_weight = self.softmax(node_edge_weight)
         context_features = self.elu(node_edge_weight @ neighbor_features)
+        # context_features = self.elu((node_edge_weight @ neighbor_features) *
+        #                             self.get_booster(neighbor_features, node_edge_matrix))
         return context_features, new_edge_features
+
+    def get_booster(self, n, nem):
+        n_num = nem.shape[0]
+        e_num = nem.shape[1]
+        eye = torch.eye(e_num)
+        if self.use_cuda:
+            eye = eye.cuda()
+        m = eye.expand([n_num, e_num, e_num])
+        e_ = nem.unsqueeze(1).expand([n_num, e_num, e_num])
+        e1 = e_ * m
+        a = e1 @ n
+        t = torch.max(a, dim=-2)[0]
+        return t
 
 
 class ConcatMesPassing(Module):
@@ -186,10 +202,14 @@ class AlignAttendPooling(Module):
                 h = self.attend(self.dropout(torch.cat([node_features, pos_features], dim=-1)))
                 a = self.relu1(self.align(torch.cat([mol_node_matrix.t() @ mol_features, pos_features, node_features],
                                                     dim=-1)))
+                # a = self.align(torch.cat([mol_node_matrix.t() @ mol_features, pos_features, node_features],
+                #                          dim=-1))
             else:
                 h = self.attend(self.dropout(node_features))
                 a = self.relu1(self.align(torch.cat([mol_node_matrix.t() @ mol_features, node_features],
                                                     dim=-1)))
+                # a = self.align(torch.cat([mol_node_matrix.t() @ mol_features, node_features],
+                #                          dim=-1))
             d = a.view([-1]).diag()
             mol_node_weight = self.softmax(mol_node_matrix @ d + mol_node_mask)
             context = self.elu(mol_node_weight @ h)
