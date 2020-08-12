@@ -26,15 +26,15 @@ from train.tox21_trainer import train_tox21
 #           position_encoder_path='',
 #           tag='qm9_nopos'
 #           )
-train_qm9(use_cuda=True,
-          limit=20000,
-          use_tqdm=True,
-          use_pos=False,
-          force_save=True,
-          special_config={'LR': 10 ** -4, 'DECAY': 10 ** -4.4, 'ITERATION': 50},
-          position_encoder_path='',
-          tag='qm9-small_nopos2'
-          )
+# train_qm9(use_cuda=True,
+#           limit=20000,
+#           use_tqdm=True,
+#           use_pos=False,
+#           force_save=True,
+#           special_config={'LR': 10 ** -4, 'DECAY': 10 ** -4.4, 'ITERATION': 50},
+#           position_encoder_path='',
+#           tag='qm9-small_nopos2'
+#           )
 train_qm9(use_cuda=True,
           limit=20000,
           use_tqdm=True,
@@ -42,7 +42,7 @@ train_qm9(use_cuda=True,
           force_save=True,
           special_config={'LR': 10 ** -4, 'DECAY': 10 ** -4.4, 'ITERATION': 50},
           position_encoder_path='',
-          tag='qm9-small_3pos2'
+          tag='test'
           )
 # fit_qm9(use_cuda=True,
 #         limit=20000,

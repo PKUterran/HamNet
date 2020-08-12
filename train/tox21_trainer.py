@@ -47,7 +47,7 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
     n_label = properties.shape[-1]
     is_nan = np.isnan(properties)
     properties[is_nan] = 0.0
-    not_nan = np.logical_not(is_nan)
+    not_nan = np.logical_not(is_nan).astype(np.float)
     not_nan_mask = not_nan.astype(np.int)
     not_nan = torch.tensor(not_nan, dtype=torch.float32)
     properties = torch.tensor(properties, dtype=torch.float32)

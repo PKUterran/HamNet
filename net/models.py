@@ -27,7 +27,8 @@ class AMPNN(Module):
         self.use_cuda = use_cuda
         assert not (use_pos and position_encoder)
         if use_pos:
-            self.pos_dim = 3
+            self.pos_dim = config['POS_DIM']
+            self.pos_trans = Linear(3, self.pos_dim)
         elif position_encoder:
             self.pos_dim = config['POS_DIM']
         else:
@@ -65,7 +66,7 @@ class AMPNN(Module):
                                                                matrix_mask_tuple, name)[0]
             uv_pos_features = pos_features[us] - pos_features[vs]
         elif self.use_pos:
-            pos_features = node_features[:, -3:]
+            pos_features = self.pos_trans(node_features[:, -3:])
             uv_pos_features = pos_features[us] - pos_features[vs]
             node_len = node_features.shape[-1]
             temp_mask = torch.tensor([1] * (node_len - 3) + [0] * 3, dtype=torch.float32)
