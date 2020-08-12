@@ -2,8 +2,11 @@ import json
 import numpy as np
 
 tag_path = (
-    ['lipop pos', 'Lipop/pos.json', False],
-    ['lipop no pos', 'Lipop/nopos.json', False],
+    ['lipop no pos', 'Lipop/lipop_nopos.json', False],
+    ['lipop pos', 'Lipop/lipop_pos.json', False],
+    ['QM9 no pos', 'QM9/qm9_nopos.json', False],
+    ['QM9 3 pos', 'QM9/qm9_3pos.json', False],
+    ['QM9 pos', 'QM9/qm9_pos.json', False],
 )
 
 for tag, path, higher_is_better in tag_path:
