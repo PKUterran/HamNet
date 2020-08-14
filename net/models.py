@@ -14,7 +14,8 @@ from utils.func import re_index
 
 
 class AMPNN(Module):
-    def __init__(self, n_dim: int, e_dim: int, config, position_encoder=None, use_pos=False, use_cuda=False):
+    def __init__(self, n_dim: int, e_dim: int, config, position_encoder=None, use_pos=False, use_cuda=False,
+                 q_only=False):
         super(AMPNN, self).__init__()
         self.h_dim = config['F_DIM']
         self.c_dims = config['C_DIMS']
@@ -33,6 +34,10 @@ class AMPNN(Module):
             self.pos_dim = config['POS_DIM']
         else:
             self.pos_dim = 0
+        self.q_only = q_only
+        self.temp_mask = torch.tensor([0] * int(self.pos_dim / 2) + [1] * int(self.pos_dim / 2), dtype=torch.float32)
+        if self.use_cuda:
+            self.temp_mask = self.temp_mask.cuda()
 
         in_dims = [self.h_dim] * (self.layers + 1)
         self.e_dim = e_dim
@@ -61,10 +66,14 @@ class AMPNN(Module):
             '{}, {}, {}.'.format(edge_features.shape, len(us), len(vs))
         if edge_features.shape[0] == 0:
             edge_features = edge_features.reshape([0, self.e_dim])
+
         if self.position_encoders[0] is not None:
             pos_features = self.position_encoders[0].transform(node_features, edge_features, us, vs,
                                                                matrix_mask_tuple, name)[0]
+            if self.q_only:
+                pos_features = pos_features * self.temp_mask
             uv_pos_features = pos_features[us] - pos_features[vs]
+            # print(pos_features[0])
         elif self.use_pos:
             pos_features = self.pos_trans(node_features[:, -3:])
             uv_pos_features = pos_features[us] - pos_features[vs]

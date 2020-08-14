@@ -29,7 +29,7 @@ def set_seed(seed: int, use_cuda: bool):
 
 
 def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tqdm=True, use_pos=False,
-              prop=list(range(12)), force_save=False, special_config: dict = None,
+              prop=list(range(12)), force_save=False, special_config: dict = None, q_only=False,
               position_encoder_path: str = 'net/pe.pt', tag='std'):
     cfg = DEFAULT_CONFIG.copy()
     if special_config:
@@ -79,6 +79,7 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
                   e_dim=e_dim,
                   config=cfg,
                   position_encoder=position_encoder,
+                  q_only=q_only,
                   use_pos=use_pos,
                   use_cuda=use_cuda)
     regression = MLP(cfg['F_DIM'], len(prop), cfg['MLP_DIMS'], dropout=cfg['DROPOUT'])

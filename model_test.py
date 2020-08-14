@@ -37,11 +37,12 @@ from train.tox21_trainer import train_tox21
 #           )
 train_qm9(use_cuda=True,
           limit=20000,
-          use_tqdm=True,
-          use_pos=True,
-          force_save=True,
+          use_tqdm=False,
+          use_pos=False,
+          force_save=False,
           special_config={'LR': 10 ** -4, 'DECAY': 10 ** -4.4, 'ITERATION': 50},
-          position_encoder_path='',
+          position_encoder_path='net/test0808.pt',
+          q_only=True,
           tag='test'
           )
 # fit_qm9(use_cuda=True,
