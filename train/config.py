@@ -18,6 +18,7 @@ FITTER_CONFIG = {
     'GAMMA_S': 0.000,
     'GAMMA_C': 0.000,
     'DISSIPATE': True,
+    'LSTM': True,
     'DISTURB': False,
 }
 

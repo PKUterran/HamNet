@@ -27,7 +27,7 @@ def set_seed(seed: int, use_cuda: bool):
 
 
 def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tqdm=True, force_save=False,
-            special_config: dict = None, model_save_path: str = 'net/pe.pt', tag='std'):
+            special_config: dict = None, model_save_path: str = 'net/pe.pt', tag='std', mpnn_pos_encode=False):
     cfg = DEFAULT_CONFIG.copy()
     if special_config:
         cfg.update(special_config)
@@ -59,7 +59,8 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
     model = PositionEncoder(n_dim=n_dim,
                             e_dim=e_dim,
                             config=cfg,
-                            use_cuda=use_cuda)
+                            use_cuda=use_cuda,
+                            use_mpnn=mpnn_pos_encode)
 
     if use_cuda:
         model.cuda()

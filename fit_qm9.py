@@ -1,9 +1,55 @@
 from train.fitter import fit_qm9
 
+# normal
+TAG = '0821'
 fit_qm9(use_cuda=True,
         limit=-1,
         use_tqdm=False,
         force_save=True,
-        model_save_path='net/server0808.pt',
-        tag='0808',
+        model_save_path='net/{}.pt'.format(TAG),
+        tag=TAG,
+        )
+
+# no dissipation
+TAG = '0821-nodis'
+fit_qm9(use_cuda=True,
+        limit=-1,
+        use_tqdm=False,
+        force_save=False,
+        model_save_path='net/{}.pt'.format(TAG),
+        special_config={'DISSIPATE': False},
+        tag=TAG,
+        )
+
+# no hamiltonian kernel
+TAG = '0821-noham'
+fit_qm9(use_cuda=True,
+        limit=-1,
+        use_tqdm=False,
+        force_save=False,
+        model_save_path='net/{}.pt'.format(TAG),
+        special_config={'HGN_LAYERS': 0},
+        tag=TAG,
+        )
+
+# no LSTM when producing p0 & q0
+TAG = '0821-nolstm'
+fit_qm9(use_cuda=True,
+        limit=-1,
+        use_tqdm=False,
+        force_save=False,
+        model_save_path='net/{}.pt'.format(TAG),
+        special_config={'LSTM': False},
+        tag=TAG,
+        )
+
+# use MPNN to encode p & q
+TAG = '0821-mpnn'
+fit_qm9(use_cuda=True,
+        limit=-1,
+        use_tqdm=False,
+        force_save=False,
+        model_save_path='net/{}.pt'.format(TAG),
+        mpnn_pos_encode=True,
+        tag=TAG,
         )

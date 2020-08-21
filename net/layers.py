@@ -254,33 +254,36 @@ class GraphConvolutionLayer(Module):
 
 
 class LstmPQEncoder(Module):
-    def __init__(self, in_dim, pq_dim, h_dim=128, num_layers=1, use_cuda=False, disturb=False):
+    def __init__(self, in_dim, pq_dim, h_dim=128, num_layers=1, use_cuda=False, disturb=False, use_lstm=True):
         super(LstmPQEncoder, self).__init__()
         self.use_cuda = use_cuda
         self.disturb = disturb
+        self.use_lstm = use_lstm
         self.pq_dim = pq_dim
-        self.gcl = GraphConvolutionLayer(in_dim, h_dim, h_dims=[h_dim], residual=True)
-        self.relu = ELU()
-        self.rnn = LSTM(in_dim + h_dim * 2, 2 * pq_dim, num_layers)
+        if self.use_lstm:
+            self.gcl = GraphConvolutionLayer(in_dim, h_dim, h_dims=[h_dim], residual=True)
+            self.relu = ELU()
+            self.rnn = LSTM(in_dim + h_dim * 2, 2 * pq_dim, num_layers)
+        else:
+            self.gcl = GraphConvolutionLayer(in_dim, 2 * pq_dim, h_dims=[h_dim], residual=False)
 
     def forward(self, node_features: torch.Tensor, mol_mode_matrix: torch.Tensor, e: torch.Tensor) \
             -> (torch.Tensor, torch.Tensor):
-        hidden_node_features = self.relu(self.gcl(node_features, e))
-        seqs = [hidden_node_features[n == 1, :] for n in mol_mode_matrix]
-        lengths = [s.shape[0] for s in seqs]
-        m = pad_sequence(seqs)
-        output, _ = self.rnn(m)
-        ret = torch.cat([output[:lengths[i], i, :] for i in range(len(lengths))])
+        if self.use_lstm:
+            hidden_node_features = self.relu(self.gcl(node_features, e))
+            seqs = [hidden_node_features[n == 1, :] for n in mol_mode_matrix]
+            lengths = [s.shape[0] for s in seqs]
+            m = pad_sequence(seqs)
+            output, _ = self.rnn(m)
+            ret = torch.cat([output[:lengths[i], i, :] for i in range(len(lengths))])
+        else:
+            ret = self.gcl(node_features, e)
         if self.disturb:
             d = torch.normal(mean=torch.zeros(ret.size()), std=torch.full(ret.size(), 0.1))
             if self.use_cuda:
                 d = d.cuda()
             ret = ret + d
         ret = ret - torch.sum(ret, dim=0) / ret.shape[0]
-        # try:
-        #     ret = ret / torch.sqrt(torch.sum(ret ** 2, dim=0) / ret.shape[0])
-        # except:
-        #     pass
         return ret[:, :self.pq_dim], ret[:, self.pq_dim:]
 
 
@@ -317,24 +320,23 @@ class Massive(Module):
 
 
 class KineticEnergy(Module):
-    def __init__(self, p_dim):
+    def __init__(self, p_dim, h_dim=128):
         super(KineticEnergy, self).__init__()
-        # self.linear = Linear(p_dim, p_dim)
-        # self.softmax = Softmax(dim=1)
-        self.tanh = Tanh()
+        self.W = Linear(p_dim, h_dim, bias=False)
 
     def forward(self, p, m):
-        # dim_attn = self.softmax(self.linear(p))
-        dim_energy = (p ** 2)
-        if torch.isnan(dim_energy.sum()):
-            dim_energy[torch.isnan(dim_energy)] = 0
-        t = torch.sum(dim_energy, dim=1, keepdim=True) / m
+        alpha = 1 / m
+        pw = self.W(p)
+        apwwp = alpha * (pw ** 2)
+        if torch.isnan(apwwp.sum()):
+            apwwp[torch.isnan(apwwp)] = 0
+        t = torch.sum(apwwp, dim=1, keepdim=True)
         # print('t:', t[:1])
         return t
 
 
 class PotentialEnergy(Module):
-    def __init__(self, n_dim, q_dim, h_dim=32, dropout=0.0, use_cuda=False):
+    def __init__(self, q_dim, h_dim=32, dropout=0.0, use_cuda=False):
         super(PotentialEnergy, self).__init__()
         self.use_cuda = use_cuda
         self.linear1 = Linear(q_dim, h_dim, bias=True)
@@ -361,17 +363,17 @@ class PotentialEnergy(Module):
 
 
 class DissipatedEnergy(Module):
-    def __init__(self, n_dim, p_dim, h_dim=32):
+    def __init__(self, p_dim, h_dim=32):
         super(DissipatedEnergy, self).__init__()
-        self.linear = Linear(n_dim, h_dim)
-        self.softplus = Softplus()
+        self.W = Linear(p_dim, h_dim, bias=False)
 
-    def forward(self, n, p, nnm):
-        root = self.linear(n)
-        c = self.softplus(root @ root.t()) * nnm
-        f = torch.sum(p * (c @ p), dim=1)
-        if torch.isnan(f.sum()):
-            f[torch.isnan(f)] = 0
+    def forward(self, p, m):
+        alpha2 = 1 / (m ** 2)
+        pw = self.W(p)
+        a2pwwp = alpha2 * (pw ** 2)
+        if torch.isnan(a2pwwp.sum()):
+            a2pwwp[torch.isnan(a2pwwp)] = 0
+        f = torch.sum(a2pwwp, dim=1, keepdim=True)
         # print('f:', f[:1])
         return f
 
@@ -381,14 +383,14 @@ class DissipativeHamiltonianDerivation(Module):
         super(DissipativeHamiltonianDerivation, self).__init__()
         self.massive = Massive(n_dim, use_cuda=use_cuda)
         self.T = KineticEnergy(p_dim)
-        self.U = PotentialEnergy(n_dim, q_dim, dropout=dropout, use_cuda=use_cuda)
-        self.F = DissipatedEnergy(n_dim, p_dim)
+        self.U = PotentialEnergy(q_dim, dropout=dropout, use_cuda=use_cuda)
+        self.F = DissipatedEnergy(p_dim)
 
     def forward(self, n, p, q, e, mol_node_matrix, mol_node_mask, return_energy=False, dissipate=True):
         nnm = mol_node_matrix.t() @ mol_node_matrix
         m = self.massive(n)
         hamiltonians = self.T(p, m) + self.U(n, m, q, e, nnm)
-        dissipations = self.F(n, p, nnm)
+        dissipations = self.F(p, m)
         hamilton = hamiltonians.sum()
         # print('hamilton:', hamilton)
         dissipated = dissipations.sum()

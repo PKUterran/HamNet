@@ -8,7 +8,7 @@ from functools import reduce
 from numpy.linalg import norm
 
 from .layers import ConcatMesPassing, PosConcatMesPassing, MolGATMesPassing, GRUAggregation, AlignAttendPooling, \
-    HamiltonianDerivation, DissipativeHamiltonianDerivation, LstmPQEncoder
+    HamiltonianDerivation, DissipativeHamiltonianDerivation, LstmPQEncoder, GraphConvolutionLayer
 from visualize.trajectory import plt_trajectory
 from utils.func import re_index
 
@@ -130,9 +130,58 @@ class AMPNN(Module):
         return mat, mask
 
 
-class PositionEncoder(Module):
+class MPNNPositionProducer(Module):
     def __init__(self, n_dim, e_dim, config, use_cuda=True):
-        super(PositionEncoder, self).__init__()
+        super(MPNNPositionProducer, self).__init__()
+        self.p_dim = config['PQ_DIM']
+        self.q_dim = config['PQ_DIM']
+        self.h_dim = self.q_dim
+        self.c_dims = [self.q_dim] * 4
+        self.he_dim = self.q_dim
+        self.pos_dim = 0
+        self.layers = len(self.c_dims)
+        self.dropout = config['DROPOUT']
+        self.use_cuda = use_cuda
+
+        in_dims = [self.h_dim] * (self.layers + 1)
+        self.e_dim = e_dim
+        self.FC_N = Linear(n_dim, self.h_dim, bias=True)
+        self.FC_E = Linear(e_dim, self.he_dim, bias=True)
+        self.Ms = ModuleList([MolGATMesPassing(in_dims[i], self.he_dim, self.pos_dim, self.c_dims[i],
+                                               dropout=self.dropout, use_cuda=use_cuda)
+                              for i in range(self.layers)])
+        self.Us = ModuleList([GRUAggregation(self.c_dims[i], in_dims[i]) for i in range(self.layers)])
+
+    def forward(self, node_features: torch.Tensor, edge_features: torch.Tensor, us: list, vs: list,
+                matrix_mask_tuple: tuple):
+        assert edge_features.shape[0] == len(us) and edge_features.shape[0] == len(vs), \
+            '{}, {}, {}.'.format(edge_features.shape, len(us), len(vs))
+        if edge_features.shape[0] == 0:
+            edge_features = edge_features.reshape([0, self.e_dim])
+
+        uv_pos_features = None
+        node_features = F.leaky_relu(self.FC_N(node_features))
+        edge_features = F.leaky_relu(self.FC_E(edge_features))
+        node_edge_matrix, node_edge_mask = matrix_mask_tuple[2], matrix_mask_tuple[3]
+        for i in range(self.layers):
+            u_features = node_features[us]
+            v_features = node_features[vs]
+            context_features, new_edge_features = self.Ms[i](u_features, v_features, edge_features, uv_pos_features,
+                                                             node_edge_matrix, node_edge_mask)
+            new_node_features = self.Us[i](node_features, context_features)
+
+            if i != self.layers - 1:
+                new_node_features = F.relu(new_node_features)
+            node_features = new_node_features
+            edge_features = new_edge_features
+
+        final_p = final_q = node_features
+        return final_p, final_q, 0, 0, None, None
+
+
+class HamiltonianPositionProducer(Module):
+    def __init__(self, n_dim, e_dim, config, use_cuda=True):
+        super(HamiltonianPositionProducer, self).__init__()
         self.p_dim = config['PQ_DIM']
         self.q_dim = config['PQ_DIM']
         self.layers = config['HGN_LAYERS']
@@ -140,25 +189,14 @@ class PositionEncoder(Module):
         self.dropout = config['DROPOUT']
         self.dissipate = config['DISSIPATE']
         self.disturb = config['DISTURB']
-        self.use_cuda = use_cuda
-
-        self.e_encoder = Linear(n_dim + e_dim + n_dim, 1)
-        self.pq_encoder = LstmPQEncoder(n_dim, self.p_dim, use_cuda=use_cuda, disturb=self.disturb)
+        self.use_lstm = config['LSTM']
+        self.pq_encoder = LstmPQEncoder(n_dim, self.p_dim,
+                                        use_cuda=use_cuda, disturb=self.disturb, use_lstm=self.use_lstm)
         # self.derivation = HamiltonianDerivation(self.p_dim, self.q_dim, dropout=0.0)
         self.derivation = DissipativeHamiltonianDerivation(n_dim, self.p_dim, self.q_dim,
                                                            use_cuda=use_cuda, dropout=0.0)
-        self.dn23 = Linear(self.q_dim, 3)
 
-        self.cache = {}
-
-    def forward(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list, matrix_mask_tuple: tuple):
-        mol_node_matrix, mol_node_mask = matrix_mask_tuple[0], matrix_mask_tuple[1]
-        node_edge_matrix, node_edge_mask = matrix_mask_tuple[2], matrix_mask_tuple[3]
-
-        u_e_v_features = torch.cat([v_features[us], e_features, v_features[vs]], dim=1)
-        e_weight = torch.diag(torch.sigmoid(self.e_encoder(u_e_v_features)).view([-1]))
-        e = node_edge_matrix @ e_weight @ node_edge_matrix.t()
-
+    def forward(self, v_features, e, mol_node_matrix, mol_node_mask):
         p0, q0 = self.pq_encoder(v_features, mol_node_matrix, e)
         ps = [p0]
         qs = [q0]
@@ -186,6 +224,40 @@ class PositionEncoder(Module):
         final_q = sum(qs) / len(qs)
 
         return final_p, final_q, s_loss, c_loss, h, d
+
+
+class PositionEncoder(Module):
+    def __init__(self, n_dim, e_dim, config, use_cuda=True, use_mpnn=False):
+        super(PositionEncoder, self).__init__()
+        # self.p_dim = config['PQ_DIM']
+        self.q_dim = config['PQ_DIM']
+        # self.layers = config['HGN_LAYERS']
+        # self.tau = config['TAU']
+        # self.dropout = config['DROPOUT']
+        # self.dissipate = config['DISSIPATE']
+        self.use_cuda = use_cuda
+        self.e_encoder = Linear(n_dim + e_dim + n_dim, 1)
+        self.use_mpnn = use_mpnn
+
+        if use_mpnn:
+            self.position_producer = MPNNPositionProducer(n_dim, e_dim, config, use_cuda)
+        else:
+            self.position_producer = HamiltonianPositionProducer(n_dim, e_dim, config, use_cuda)
+        self.dn23 = Linear(self.q_dim, 3)
+
+        self.cache = {}
+
+    def forward(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list, matrix_mask_tuple: tuple):
+        mol_node_matrix, mol_node_mask = matrix_mask_tuple[0], matrix_mask_tuple[1]
+        node_edge_matrix, node_edge_mask = matrix_mask_tuple[2], matrix_mask_tuple[3]
+
+        u_e_v_features = torch.cat([v_features[us], e_features, v_features[vs]], dim=1)
+        e_weight = torch.diag(torch.sigmoid(self.e_encoder(u_e_v_features)).view([-1]))
+        e = node_edge_matrix @ e_weight @ node_edge_matrix.t()
+        if self.use_mpnn:
+            return self.position_producer(v_features, e_features, us, vs, matrix_mask_tuple)
+        else:
+            return self.position_producer(v_features, e, mol_node_matrix, mol_node_mask)
 
     def fit(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list,
             matrix_mask_tuple: tuple, fit_pos: torch.Tensor, print_mode=False):

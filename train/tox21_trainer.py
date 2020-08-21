@@ -196,7 +196,7 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
         print('\tEvaluating validation: ')
         evaluate(validate_mask_list, name='evaluate')
         print('\tEvaluating test: ')
-        evaluate(test_mask_list)
+        evaluate(test_mask_list, name='test')
         gc.collect()
         d = {'metric': 'Multi-ROC', 'logs': logs}
         with open('{}{}.json'.format(LOG_PATH, tag), 'w+', encoding='utf-8') as fp:
