@@ -51,14 +51,13 @@ MODEL_CONFIG = {
 MODEL_CONFIG_QM9 = MODEL_CONFIG.copy()
 MODEL_CONFIG_QM9.update({
     'LR': 10 ** -4.9,
-    'DECAY': 10 ** -5.1,
+    'DECAY': 10 ** -5.0,
     'DROPOUT': 0.0,
     'ITERATION': 300,
     'EVAL': 3000,
     'HE_DIM': 280,
     'C_DIMS': [280, 280],
     'F_DIM': 280,
-    'MLP_DIMS': [],
     'MAX_DICT': 4096,
 })
 
