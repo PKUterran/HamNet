@@ -2,8 +2,8 @@ import json
 import numpy as np
 
 tag_path = (
-    ['pos', 'pos/0821.json', False],
-    ['pos no dis', 'pos/0821-nodis.json', False],
+    # ['pos', 'pos/0821.json', False],
+    # ['pos no dis', 'pos/0821-nodis.json', False],
     ['tox21 no pos', 'TOX21/tox21_nopos.json', True],
     ['tox21 pos', 'TOX21/tox21_pos.json', True],
     ['lipop no pos', 'Lipop/lipop_nopos.json', False],
@@ -23,5 +23,7 @@ for tag, path, higher_is_better in tag_path:
             val = dd['evaluate_metric']
             test = dd['test_metric']
             if (higher_is_better and val > best_val) or (not higher_is_better and val < best_val):
+                # print(dd['epoch'], dd['train_metric'], val, test)
+                best_val = val
                 cor_test = test
         print('{}: {}'.format(tag, cor_test))
