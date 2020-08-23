@@ -2,11 +2,15 @@ import json
 import numpy as np
 
 tag_path = (
+    ['pos', 'pos/0821.json', False],
+    ['pos no dis', 'pos/0821-nodis.json', False],
+    ['tox21 no pos', 'TOX21/tox21_nopos.json', True],
+    ['tox21 pos', 'TOX21/tox21_pos.json', True],
     ['lipop no pos', 'Lipop/lipop_nopos.json', False],
     ['lipop pos', 'Lipop/lipop_pos.json', False],
-    ['QM9 no pos', 'QM9/qm9_nopos.json', False],
-    ['QM9 3 pos', 'QM9/qm9_3pos.json', False],
-    ['QM9 pos', 'QM9/qm9_pos.json', False],
+    # ['QM9 no pos', 'QM9/qm9_nopos.json', False],
+    # ['QM9 3 pos', 'QM9/qm9_3pos.json', False],
+    # ['QM9 pos', 'QM9/qm9_pos.json', False],
 )
 
 for tag, path, higher_is_better in tag_path:
@@ -18,6 +22,6 @@ for tag, path, higher_is_better in tag_path:
         for dd in logs:
             val = dd['evaluate_metric']
             test = dd['test_metric']
-            if higher_is_better and val > best_val or not higher_is_better and val < best_val:
+            if (higher_is_better and val > best_val) or (not higher_is_better and val < best_val):
                 cor_test = test
         print('{}: {}'.format(tag, cor_test))

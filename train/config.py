@@ -67,7 +67,7 @@ MODEL_CONFIG_LIPOP.update({
     'DECAY': 1e-4,
     'DROPOUT': 0.5,
     'ITERATION': 200,
-    'BATCH': 10,
+    'BATCH': 64,
     'EVAL': 2000,
     'HE_DIM': 256,
     'C_DIMS': [256, 256, 256],
@@ -81,7 +81,7 @@ MODEL_CONFIG_TOX21.update({
     'DECAY': 4e-5,
     'DROPOUT': 0.5,
     'ITERATION': 200,
-    'BATCH': 10,
+    'BATCH': 64,
     'EVAL': 2000,
     'M_RADIUS': 4,
 })
