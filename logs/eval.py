@@ -1,9 +1,8 @@
 import json
-import numpy as np
 
 tag_path = (
-    # ['pos', 'pos/0821.json', False],
-    # ['pos no dis', 'pos/0821-nodis.json', False],
+    ['pos', 'pos/0821.json', False],
+    ['pos no dis', 'pos/0821-nodis.json', False],
     ['tox21 no pos', 'TOX21/tox21_nopos.json', True],
     ['tox21 pos', 'TOX21/tox21_pos.json', True],
     ['lipop no pos', 'Lipop/lipop_nopos.json', False],

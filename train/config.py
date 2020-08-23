@@ -63,8 +63,8 @@ MODEL_CONFIG_QM9.update({
 
 MODEL_CONFIG_LIPOP = MODEL_CONFIG.copy()
 MODEL_CONFIG_LIPOP.update({
-    'LR': 10 ** -4.0,
-    'DECAY': 10 ** -3.5,
+    'LR': 10 ** -3.5,
+    'DECAY': 10 ** -4.0,
     'DROPOUT': 0.5,
     'ITERATION': 200,
     'BATCH': 64,
@@ -77,8 +77,8 @@ MODEL_CONFIG_LIPOP.update({
 
 MODEL_CONFIG_TOX21 = MODEL_CONFIG.copy()
 MODEL_CONFIG_TOX21.update({
-    'LR': 10 ** -4.0,
-    'DECAY': 10 ** -3.5,
+    'LR': 10 ** -3.5,
+    'DECAY': 10 ** -4.0,
     'DROPOUT': 0.5,
     'ITERATION': 200,
     'BATCH': 64,
