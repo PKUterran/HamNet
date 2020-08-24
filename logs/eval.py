@@ -4,10 +4,11 @@ import numpy as np
 tag_path = (
     # ['pos', ['pos/0821.json'], False],
     # ['pos no dis', ['pos/0821-nodis.json'], False],
-    ['tox21 no pos', ['TOX21/tox21_nopos@16880611.json'], True],
-    ['tox21 pos', ['TOX21/tox21_pos.json'], True],
-    ['lipop no pos', ['Lipop/lipop_nopos@16880611.json'], False],
-    ['lipop pos', ['Lipop/lipop_pos.json'], False],
+    # ['pos no ham', ['pos/0821-noham.json'], False],
+    # ['tox21 no pos', ['TOX21/tox21_nopos.json'], True],
+    # ['tox21 pos', ['TOX21/tox21_pos.json'], True],
+    # ['lipop no pos', ['Lipop/lipop_nopos.json'], False],
+    # ['lipop pos', ['Lipop/lipop_pos.json'], False],
     # ['QM9 no pos', ['QM9/qm9_nopos.json'], False],
     # ['QM9 3 pos', ['QM9/qm9_3pos.json'], False],
     # ['QM9 pos', ['QM9/qm9_pos.json'], False],
@@ -32,4 +33,4 @@ for tag, paths, higher_is_better in tag_path:
             cor_tests.append(cor_test)
             # print('{}: {}'.format(tag, cor_test))
 
-    print('{}: {:.4f}'.format(tag, np.average(cor_tests)))
+    print('{}: {:.5f}'.format(tag, np.average(cor_tests)))
