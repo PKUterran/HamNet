@@ -11,8 +11,13 @@
 
 # module add anaconda/3-5.0.0.1
 # source activate ysw_pytorch
-python train_tox21.py --seed 16880611
-python train_tox21.py --seed 17760704
-python train_tox21.py --seed 17890714
-python train_tox21.py --seed 19491001
-python train_tox21.py --seed 19900612
+python train_tox21.py --seed 16880611 --pos True
+python train_tox21.py --seed 17760704 --pos True
+python train_tox21.py --seed 17890714 --pos True
+python train_tox21.py --seed 19491001 --pos True
+python train_tox21.py --seed 19900612 --pos True
+python train_tox21.py --seed 16880611 --pos False
+python train_tox21.py --seed 17760704 --pos False
+python train_tox21.py --seed 17890714 --pos False
+python train_tox21.py --seed 19491001 --pos False
+python train_tox21.py --seed 19900612 --pos False
