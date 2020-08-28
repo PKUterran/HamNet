@@ -1,11 +1,23 @@
 from train.fitter import fit_qm9
 
+# rdkit
+TAG = 'rdkit'
+fit_qm9(use_cuda=True,
+        limit=-1,
+        use_tqdm=False,
+        force_save=True,
+        model_save_path='net/{}.pt'.format(TAG),
+        special_config={'ITERATION': 1},
+        tag=TAG,
+        use_rdkit=True,
+        )
+
 # normal
 TAG = '0821'
 fit_qm9(use_cuda=True,
         limit=-1,
         use_tqdm=False,
-        force_save=True,
+        force_save=False,
         model_save_path='net/{}.pt'.format(TAG),
         tag=TAG,
         )

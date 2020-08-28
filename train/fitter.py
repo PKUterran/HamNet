@@ -1,6 +1,8 @@
 import numpy as np
+import time
 import torch
 import torch.optim as optim
+import torch.autograd as autograd
 import gc
 import json
 from tqdm import tqdm
@@ -12,6 +14,7 @@ from data.gdb9_reader import load_mol_atom_pos
 from utils.sample import sample
 from utils.cache import MatrixCache
 from utils.rotate import rotate_to
+from utils.kabsch import kabsch
 from visualize.molecule import plt_molecule_3d
 from net.models import PositionEncoder
 
@@ -27,7 +30,9 @@ def set_seed(seed: int, use_cuda: bool):
 
 
 def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tqdm=True, force_save=False,
-            special_config: dict = None, model_save_path: str = 'net/pe.pt', tag='std', mpnn_pos_encode=False):
+            special_config: dict = None, model_save_path: str = 'net/pe.pt', tag='std', mpnn_pos_encode=False,
+            use_rdkit=False):
+    t0 = time.time()
     cfg = DEFAULT_CONFIG.copy()
     if special_config:
         cfg.update(special_config)
@@ -60,7 +65,8 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
                             e_dim=e_dim,
                             config=cfg,
                             use_cuda=use_cuda,
-                            use_mpnn=mpnn_pos_encode)
+                            use_mpnn=mpnn_pos_encode,
+                            use_rdkit=use_rdkit)
 
     if use_cuda:
         model.cuda()
@@ -71,6 +77,7 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
     matrix_cache = MatrixCache(cfg['MAX_DICT'])
     best_val = -1e8
     logs = []
+    graph_logs = []
 
     def visualize(smiles_list, pos: torch.Tensor, fit_pos: torch.Tensor, mol_node_matrix: torch.Tensor, vis=range(5)):
         if use_cuda:
@@ -79,15 +86,20 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
             mol_node_matrix = mol_node_matrix.cpu()
         pos = pos.detach()
         fit_pos = fit_pos.detach()
+        pos_list = []
         for i in vis:
             node_mask = mol_node_matrix[i] > 0
             pos_i = pos[node_mask == 1, :]
             fit_pos_i = fit_pos[node_mask == 1, :]
-            new_pos_i = rotate_to(pos_i, fit_pos_i)
-            plt_molecule_3d(new_pos_i.numpy(), smiles_list[i],
-                            title='fit_qm9_{}_{}_{}'.format(tag, epoch, i), d=GRAPH_PATH)
-            plt_molecule_3d(fit_pos_i.numpy(), smiles_list[i],
-                            title='fit_qm9_origin_{}'.format(i), d=GRAPH_PATH)
+            new_pos_i, new_fit_pos_i = kabsch(pos_i, fit_pos_i,
+                                              torch.full([1, pos_i.shape[0]], 1, dtype=torch.float32),
+                                              use_cuda=False)
+            pos_list.append({'smiles': smiles_list[i], 'src': new_pos_i.tolist(), 'tgt': new_fit_pos_i.tolist()})
+            # plt_molecule_3d(new_pos_i.numpy(), smiles_list[i],
+            #                 title='fit_qm9_{}_{}_{}'.format(tag, epoch, i), d=GRAPH_PATH)
+            # plt_molecule_3d(new_fit_pos_i.numpy(), smiles_list[i],
+            #                 title='fit_qm9_origin_{}'.format(i), d=GRAPH_PATH)
+        graph_logs[-1].update({'pos': pos_list})
 
     def forward(mask: list, name=None) -> (torch.Tensor, torch.Tensor, torch.Tensor):
         nfs = torch.cat([molecules[i].node_features for i in mask])
@@ -99,12 +111,13 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
             atom_pos = atom_pos.cuda()
 
         us, vs, mm_tuple = matrix_cache.fetch(molecules, mask, nfs, name, use_cuda)
+        mask_smiles = [smiles[i] for i in mask]
 
-        dis_loss, adj3_loss, s_loss, c_loss, pos = model.fit(nfs, efs, us, vs, mm_tuple, atom_pos,
-                                                             print_mode=name == 'test0')
+        rmsd_loss, adj3_loss, s_loss, c_loss, pos = model.fit(nfs, efs, mask_smiles, us, vs, mm_tuple, atom_pos,
+                                                              print_mode=name == 'test0')
         if name == 'test0':
             visualize([smiles[i] for i in mask], pos, atom_pos, mm_tuple[0])
-        return dis_loss, adj3_loss, s_loss, c_loss
+        return rmsd_loss, adj3_loss, s_loss, c_loss
 
     def train(mask_list: list, name=None):
         model.train()
@@ -122,19 +135,19 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
             else:
                 name_ = None
             optimizer.zero_grad()
-            d_loss, a_loss, s_loss, c_loss = forward(m, name=name_)
-            d_losses.append(d_loss.cpu().item() if 'cpu' in dir(d_loss) else d_loss)
-            a_losses.append(a_loss.cpu().item() if 'cpu' in dir(a_loss) else a_loss)
+            r_loss, d_loss, s_loss, c_loss = forward(m, name=name_)
+            d_losses.append(r_loss.cpu().item() if 'cpu' in dir(r_loss) else r_loss)
+            a_losses.append(d_loss.cpu().item() if 'cpu' in dir(d_loss) else d_loss)
             s_losses.append(s_loss.cpu().item() if 'cpu' in dir(s_loss) else s_loss)
             c_losses.append(c_loss.cpu().item() if 'cpu' in dir(c_loss) else c_loss)
+            loss = r_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
             # loss = d_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
-            loss = a_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
             loss.backward()
             optimizer.step()
             nonlocal current_lr
             current_lr *= 1 - cfg['DECAY']
 
-        print('\t\tDistance loss: {:.4f}'.format(np.average(d_losses)))
+        print('\t\tRMSD loss: {:.4f}'.format(np.average(d_losses)))
         print('\t\tADJ3 loss: {:.4f}'.format(np.average(a_losses)))
         print('\t\tStationary loss: {:.4f}'.format(np.average(s_losses)))
         print('\t\tCentrality loss: {:.4f}'.format(np.average(c_losses)))
@@ -168,23 +181,28 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
                 best_val = val
                 print('\t\tSaving finished!')
         print('\t\tLoss: {:.5f}'.format(np.average(losses)))
-        print('\t\tDistance Loss: {:.5f}'.format(np.average(d_losses)))
+        print('\t\tRMSD Loss: {:.5f}'.format(np.average(d_losses)))
         logs[-1].update({'{}_loss'.format(name): np.average(losses)})
         logs[-1].update({'{}_metric'.format(name): np.average(d_losses)})
 
     for epoch in range(cfg['ITERATION']):
         logs.append({'epoch': epoch + 1})
+        graph_logs.append({'epoch': epoch + 1})
         print('In iteration {}:'.format(epoch + 1))
         print('\tLearning rate: {:.8e}'.format(current_lr))
-        print('\tTraining: ')
-        train(train_mask_list, name='train')
-        print('\tEvaluating training: ')
-        evaluate(train_mask_list, name='train')
-        print('\tEvaluating validation: ')
-        evaluate(validate_mask_list, name='evaluate')
+        if not use_rdkit:
+            print('\tTraining: ')
+            train(train_mask_list, name='train')
+            print('\tEvaluating training: ')
+            evaluate(train_mask_list, name='train')
+            print('\tEvaluating validation: ')
+            evaluate(validate_mask_list, name='evaluate')
         print('\tEvaluating test: ')
         evaluate(test_mask_list, name='test')
         gc.collect()
-        d = {'metric': 'Distance Loss', 'logs': logs}
+        d = {'metric': 'Distance Loss', 'time': time.time() - t0, 'logs': logs}
         with open('{}{}.json'.format(LOG_PATH, tag), 'w+', encoding='utf-8') as fp:
             json.dump(d, fp)
+        gd = graph_logs
+        with open('{}{}.json'.format(GRAPH_PATH, tag), 'w+', encoding='utf-8') as fp:
+            json.dump(gd, fp)

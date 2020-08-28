@@ -7,9 +7,9 @@ FITTER_CONFIG = {
     'TEST_PER': 0.1,
 
     'LR': 1e-4,
-    'DECAY': 1e-5,
+    'DECAY': 4e-5,
     'DROPOUT': 0.5,
-    'ITERATION': 50,
+    'ITERATION': 30,
     'BATCH': 32,
 
     'HGN_LAYERS': 20,

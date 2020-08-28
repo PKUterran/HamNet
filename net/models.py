@@ -2,15 +2,18 @@ import numpy as np
 import time
 import torch
 import torch.nn.functional as F
+import torch.autograd as autograd
 from torch.nn import Module, Linear, ReLU, Dropout, ModuleList, Parameter
 from itertools import chain
 from functools import reduce
 from numpy.linalg import norm
 
+from .rdkit_pos import rdkit_pos
 from .layers import ConcatMesPassing, PosConcatMesPassing, MolGATMesPassing, GRUAggregation, AlignAttendPooling, \
-    HamiltonianDerivation, DissipativeHamiltonianDerivation, LstmPQEncoder, GraphConvolutionLayer
+    HamiltonianDerivation, DissipativeHamiltonianDerivation, LstmPQEncoder, GraphConvolutionLayer, Massive
 from visualize.trajectory import plt_trajectory
 from utils.func import re_index
+from utils.kabsch import kabsch, rmsd
 
 
 class AMPNN(Module):
@@ -226,43 +229,75 @@ class HamiltonianPositionProducer(Module):
         return final_p, final_q, s_loss, c_loss, h, d
 
 
-class PositionEncoder(Module):
-    def __init__(self, n_dim, e_dim, config, use_cuda=True, use_mpnn=False):
-        super(PositionEncoder, self).__init__()
-        # self.p_dim = config['PQ_DIM']
+class RDKitPositionProducer(Module):
+    def __init__(self, config, use_cuda=True):
+        super(RDKitPositionProducer, self).__init__()
+        self.p_dim = config['PQ_DIM']
         self.q_dim = config['PQ_DIM']
-        # self.layers = config['HGN_LAYERS']
-        # self.tau = config['TAU']
-        # self.dropout = config['DROPOUT']
-        # self.dissipate = config['DISSIPATE']
+        # self.p_encode = Linear(3, self.p_dim)
+        # self.q_encode = Linear(3, self.q_dim)
+        self.use_cuda = use_cuda
+
+    def forward(self, smiles: list):
+        ret = rdkit_pos(smiles)
+        pos = torch.tensor(ret, dtype=torch.float32)
+        if self.use_cuda:
+            pos = pos.cuda()
+        # final_p = self.p_encode(pos)
+        # final_q = self.q_encode(pos)
+        return pos
+
+
+class PositionEncoder(Module):
+    def __init__(self, n_dim, e_dim, config, use_cuda=True, use_mpnn=False, use_rdkit=False):
+        super(PositionEncoder, self).__init__()
+        assert not use_mpnn or not use_rdkit
+        self.q_dim = config['PQ_DIM']
         self.use_cuda = use_cuda
         self.e_encoder = Linear(n_dim + e_dim + n_dim, 1)
         self.use_mpnn = use_mpnn
+        self.use_rdkit = use_rdkit
+        self.massive = Massive(n_dim, use_cuda=use_cuda)
 
         if use_mpnn:
-            self.position_producer = MPNNPositionProducer(n_dim, e_dim, config, use_cuda)
+            self.position_producer = MPNNPositionProducer(n_dim, e_dim, config, use_cuda=use_cuda)
+        elif use_rdkit:
+            self.position_producer = RDKitPositionProducer(config, use_cuda=use_cuda)
         else:
-            self.position_producer = HamiltonianPositionProducer(n_dim, e_dim, config, use_cuda)
+            self.position_producer = HamiltonianPositionProducer(n_dim, e_dim, config, use_cuda=use_cuda)
         self.dn23 = Linear(self.q_dim, 3)
 
         self.cache = {}
 
-    def forward(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list, matrix_mask_tuple: tuple):
+    def forward(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list, matrix_mask_tuple: tuple,
+                smiles: list):
         mol_node_matrix, mol_node_mask = matrix_mask_tuple[0], matrix_mask_tuple[1]
         node_edge_matrix, node_edge_mask = matrix_mask_tuple[2], matrix_mask_tuple[3]
 
         u_e_v_features = torch.cat([v_features[us], e_features, v_features[vs]], dim=1)
+        # print('uev:', u_e_v_features)
         e_weight = torch.diag(torch.sigmoid(self.e_encoder(u_e_v_features)).view([-1]))
-        e = node_edge_matrix @ e_weight @ node_edge_matrix.t()
+        # print('e weight:', e_weight)
+        # e = node_edge_matrix @ e_weight @ node_edge_matrix.t()
+        e = node_edge_matrix @ node_edge_matrix.t()
+        # print('e:', e)
         if self.use_mpnn:
             return self.position_producer(v_features, e_features, us, vs, matrix_mask_tuple)
+        elif self.use_rdkit:
+            assert len(smiles)
+            return self.position_producer(smiles)
         else:
             return self.position_producer(v_features, e, mol_node_matrix, mol_node_mask)
 
-    def fit(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list,
+    def fit(self, v_features: torch.Tensor, e_features: torch.Tensor, smiles: list, us: list, vs: list,
             matrix_mask_tuple: tuple, fit_pos: torch.Tensor, print_mode=False):
-        _, q, s_loss, c_loss, h, d = self(v_features, e_features, us, vs, matrix_mask_tuple)
-        pos = self.dn23(q)
+        if self.use_rdkit:
+            pos = self(v_features, e_features, us, vs, matrix_mask_tuple, smiles)
+            s_loss = c_loss = 0
+            h = d = None
+        else:
+            _, q, s_loss, c_loss, h, d = self(v_features, e_features, us, vs, matrix_mask_tuple, smiles)
+            pos = self.dn23(q)
         mol_node_matrix = matrix_mask_tuple[0]
         node_edge_matrix = matrix_mask_tuple[2]
 
@@ -275,6 +310,10 @@ class PositionEncoder(Module):
         norm_mnm = mol_node_matrix / mol_node_matrix.sum(dim=1).unsqueeze(-1)
         dis_mask = norm_mnm.t() @ norm_mnm
 
+        # Kabsch-RMSD
+        k_pos, k_fit_pos = kabsch(pos, fit_pos, mol_node_matrix, use_cuda=self.use_cuda)
+        rmsd_loss = rmsd(k_pos, k_fit_pos, self.massive.forward(v_features))
+
         dis = (pos.unsqueeze(0) - pos.unsqueeze(1)).norm(dim=2)
         fit_dis = (fit_pos.unsqueeze(0) - fit_pos.unsqueeze(1)).norm(dim=2)
         dis_loss = ((dis - fit_dis) * dis_mask).pow(2).sum() / mol_node_matrix.shape[0]
@@ -286,10 +325,11 @@ class PositionEncoder(Module):
             print(dis_mask.cpu().detach().numpy()[:8, :8])
             print(dis.cpu().detach().numpy()[:8, :8])
             print(fit_dis.cpu().detach().numpy()[:8, :8])
-        return dis_loss, adj3_loss, s_loss, c_loss, pos
+        return rmsd_loss, dis_loss, s_loss, c_loss, pos
 
     def transform(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list,
                   matrix_mask_tuple: tuple, name=''):
+        assert not self.use_rdkit
         if name and name in self.cache.keys():
             # print('cache hit:', name)
             pq = self.cache[name]

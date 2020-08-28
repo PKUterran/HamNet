@@ -244,7 +244,9 @@ class GraphConvolutionLayer(Module):
             h = torch.cat(hs, dim=-1)
         else:
             h = hs[-1]
-        if self.activation == 'tanh':
+        if self.activation == 'sigmoid':
+            h = torch.sigmoid(h)
+        elif self.activation == 'tanh':
             h = torch.tanh(h)
         elif not self.activation:
             pass
@@ -261,11 +263,11 @@ class LstmPQEncoder(Module):
         self.use_lstm = use_lstm
         self.pq_dim = pq_dim
         if self.use_lstm:
-            self.gcl = GraphConvolutionLayer(in_dim, h_dim, h_dims=[h_dim], residual=True)
+            self.gcl = GraphConvolutionLayer(in_dim, h_dim, h_dims=[h_dim], activation='tanh', residual=True)
             self.relu = ELU()
             self.rnn = LSTM(in_dim + h_dim * 2, 2 * pq_dim, num_layers)
         else:
-            self.gcl = GraphConvolutionLayer(in_dim, 2 * pq_dim, h_dims=[h_dim], residual=False)
+            self.gcl = GraphConvolutionLayer(in_dim, 2 * pq_dim, h_dims=[h_dim], activation='tanh', residual=False)
 
     def forward(self, node_features: torch.Tensor, mol_mode_matrix: torch.Tensor, e: torch.Tensor) \
             -> (torch.Tensor, torch.Tensor):
@@ -306,9 +308,8 @@ class DirectDerivation(Module):
         return dp, dq
 
 
-class Massive(Module):
+class Massive:
     def __init__(self, n_dim, use_cuda=False):
-        super(Massive, self).__init__()
         self.massive_matrix = torch.from_numpy(get_default_atoms_massive_matrix()).type(torch.float32)
         if use_cuda:
             self.massive_matrix = self.massive_matrix.cuda()
@@ -388,7 +389,7 @@ class DissipativeHamiltonianDerivation(Module):
 
     def forward(self, n, p, q, e, mol_node_matrix, mol_node_mask, return_energy=False, dissipate=True):
         nnm = mol_node_matrix.t() @ mol_node_matrix
-        m = self.massive(n)
+        m = self.massive.forward(n)
         hamiltonians = self.T(p, m) + self.U(n, m, q, e, nnm)
         dissipations = self.F(p, m)
         hamilton = hamiltonians.sum()

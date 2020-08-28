@@ -93,16 +93,36 @@
 # print(i[1]['nf'])
 
 
-import torch
+# import torch
+#
+# nem = torch.tensor([[1, 0, 1], [1, 1, 0], [0, 1, 1]], dtype=torch.float32)
+# n = torch.tensor([[1, 6], [4, 3], [5, 2]], dtype=torch.float32)
+# n_num = nem.shape[0]
+# e_num = nem.shape[1]
+# eye = torch.eye(e_num)
+# m = eye.expand([n_num, e_num, e_num])
+# e_ = nem.unsqueeze(1).expand([n_num, e_num, e_num])
+# e1 = e_ * m
+# a = e1 @ n
+# t = torch.max(a, dim=-2)[0]
+# print(t)
 
-nem = torch.tensor([[1, 0, 1], [1, 1, 0], [0, 1, 1]], dtype=torch.float32)
-n = torch.tensor([[1, 6], [4, 3], [5, 2]], dtype=torch.float32)
-n_num = nem.shape[0]
-e_num = nem.shape[1]
-eye = torch.eye(e_num)
-m = eye.expand([n_num, e_num, e_num])
-e_ = nem.unsqueeze(1).expand([n_num, e_num, e_num])
-e1 = e_ * m
-a = e1 @ n
-t = torch.max(a, dim=-2)[0]
-print(t)
+a = [11, 24, 47, 217, 225, 260, 263, 291, 304, 385, 409, 485, 499, 624, 625, 704, 706, 721, 1027, 1075, 1152, 1211,
+     1280, 1312, 1314, 1331, 1442, 1543, 1561, 1576, 1607, 1709, 1748, 1930]
+b = [15, 54, 205, 237, 297, 394, 415, 485, 584, 595, 793, 813, 823, 1046, 1126, 1127, 1257, 1422, 1485, 1493, 1503,
+     1504, 1566, 1577, 1604, 1610, 1665, 1749, 1762, 1831, 1843, 1903, 1950]
+c = [3, 147, 201, 283, 364, 484, 506, 510, 696, 746, 794, 806, 847, 850, 864, 866, 880, 1001, 1037, 1070, 1165, 1236,
+     1277, 1286, 1323, 1335, 1354, 1545, 1587, 1630, 1780, 1809, 1841, 1855]
+d = [1, 144, 210, 212, 262, 271, 321, 388, 416, 431, 666, 686, 694, 707, 731, 762, 844, 849, 895, 1105, 1194, 1245,
+     1255, 1263, 1265, 1368, 1407, 1464, 1503, 1511, 1600, 1740, 1841, 1885]
+e = [22, 227, 295, 561, 996, 1018, 1034, 1036, 1104, 1126, 1762]
+f = [3, 570, 1022, 1042, 1099, 1239, 1368, 1393, 1666, 1849, 1938]
+
+desk = {}
+for i in a + b + c + d + e + f:
+    if i in desk.keys():
+        desk[i] += 1
+    else:
+        desk[i] = 1
+
+print(sorted(desk.items(), key=lambda x: x[1], reverse=True))

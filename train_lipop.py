@@ -3,7 +3,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=12345)
-parser.add_argument('--pos', type=bool, default=True)
+parser.add_argument('--pos', type=int, default=1)
 arg = parser.parse_args()
 seed = arg.seed
 pos = arg.pos
