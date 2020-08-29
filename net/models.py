@@ -312,6 +312,7 @@ class PositionEncoder(Module):
 
         # Kabsch-RMSD
         k_pos, k_fit_pos = kabsch(pos, fit_pos, mol_node_matrix, use_cuda=self.use_cuda)
+        k_pos, k_fit_pos = k_pos.detach(), k_fit_pos.detach()
         rmsd_loss = rmsd(k_pos, k_fit_pos, self.massive.forward(v_features))
 
         dis = (pos.unsqueeze(0) - pos.unsqueeze(1)).norm(dim=2)
@@ -325,7 +326,7 @@ class PositionEncoder(Module):
             print(dis_mask.cpu().detach().numpy()[:8, :8])
             print(dis.cpu().detach().numpy()[:8, :8])
             print(fit_dis.cpu().detach().numpy()[:8, :8])
-        return rmsd_loss, dis_loss, s_loss, c_loss, pos
+        return adj3_loss, dis_loss, rmsd_loss, s_loss, c_loss, pos
 
     def transform(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list,
                   matrix_mask_tuple: tuple, name=''):

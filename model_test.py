@@ -77,7 +77,7 @@ fit_qm9(use_cuda=True,
                         'LR': 1e-3, 'DISSIPATE': True,
                         'GAMMA_S': 0e-2, 'GAMMA_A': 0e-0, 'LSTM': True,
                         },
-        model_save_path='net/test0821.pt',
+        model_save_path='net/test0824.pt',
         tag='test0824',
         )
 # fit_qm9(use_cuda=True,

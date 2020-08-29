@@ -101,7 +101,7 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
             #                 title='fit_qm9_origin_{}'.format(i), d=GRAPH_PATH)
         graph_logs[-1].update({'pos': pos_list})
 
-    def forward(mask: list, name=None) -> (torch.Tensor, torch.Tensor, torch.Tensor):
+    def forward(mask: list, name=None):
         nfs = torch.cat([molecules[i].node_features for i in mask])
         efs = torch.cat([molecules[i].edge_features for i in mask])
         atom_pos = torch.cat([torch.from_numpy(mol_atom_pos[i]).type(torch.float32) for i in mask])
@@ -113,16 +113,17 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
         us, vs, mm_tuple = matrix_cache.fetch(molecules, mask, nfs, name, use_cuda)
         mask_smiles = [smiles[i] for i in mask]
 
-        rmsd_loss, adj3_loss, s_loss, c_loss, pos = model.fit(nfs, efs, mask_smiles, us, vs, mm_tuple, atom_pos,
-                                                              print_mode=name == 'test0')
+        adj3_loss, dis_loss, rmsd_metric, s_loss, c_loss, pos = model.fit(nfs, efs, mask_smiles, us, vs, mm_tuple,
+                                                                          atom_pos, print_mode=name == 'test0')
         if name == 'test0':
             visualize([smiles[i] for i in mask], pos, atom_pos, mm_tuple[0])
-        return rmsd_loss, adj3_loss, s_loss, c_loss
+        return adj3_loss, dis_loss, rmsd_metric, s_loss, c_loss
 
     def train(mask_list: list, name=None):
         model.train()
-        d_losses = []
         a_losses = []
+        d_losses = []
+        r_losses = []
         s_losses = []
         c_losses = []
 
@@ -135,28 +136,32 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
             else:
                 name_ = None
             optimizer.zero_grad()
-            r_loss, d_loss, s_loss, c_loss = forward(m, name=name_)
-            d_losses.append(r_loss.cpu().item() if 'cpu' in dir(r_loss) else r_loss)
-            a_losses.append(d_loss.cpu().item() if 'cpu' in dir(d_loss) else d_loss)
+            a_loss, d_loss, r_metric, s_loss, c_loss = forward(m, name=name_)
+            a_losses.append(a_loss.cpu().item() if 'cpu' in dir(a_loss) else a_loss)
+            d_losses.append(d_loss.cpu().item() if 'cpu' in dir(d_loss) else d_loss)
+            r_losses.append(r_metric.cpu().item() if 'cpu' in dir(r_metric) else r_metric)
             s_losses.append(s_loss.cpu().item() if 'cpu' in dir(s_loss) else s_loss)
             c_losses.append(c_loss.cpu().item() if 'cpu' in dir(c_loss) else c_loss)
-            loss = r_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
+            loss = a_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
             # loss = d_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
             loss.backward()
             optimizer.step()
             nonlocal current_lr
             current_lr *= 1 - cfg['DECAY']
 
-        print('\t\tRMSD loss: {:.4f}'.format(np.average(d_losses)))
         print('\t\tADJ3 loss: {:.4f}'.format(np.average(a_losses)))
+        print('\t\tDistance loss: {:.4f}'.format(np.average(d_losses)))
+        print('\t\tRMSD metric: {:.4f}'.format(np.average(r_losses)))
         print('\t\tStationary loss: {:.4f}'.format(np.average(s_losses)))
         print('\t\tCentrality loss: {:.4f}'.format(np.average(c_losses)))
-        logs[-1].update({'on_train_loss': np.average(d_losses)})
+        logs[-1].update({'on_train_loss': np.average(a_losses)})
 
     def evaluate(mask_list: list, name=None):
         model.eval()
         losses = []
+        a_losses = []
         d_losses = []
+        r_losses = []
 
         t = enumerate(mask_list)
         if use_tqdm:
@@ -166,11 +171,13 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
                 name_ = name + str(i)
             else:
                 name_ = None
-            d_loss, a_loss, s_loss, c_loss = forward(m, name=name_)
-            # loss = d_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
+            a_loss, d_loss, r_metric, s_loss, c_loss = forward(m, name=name_)
             loss = a_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
-            losses.append(loss.cpu().item())
-            d_losses.append(d_loss.cpu().item())
+            # loss = d_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
+            losses.append(loss.cpu().item() if 'cpu' in dir(loss) else loss)
+            a_losses.append(a_loss.cpu().item() if 'cpu' in dir(a_loss) else a_loss)
+            d_losses.append(d_loss.cpu().item() if 'cpu' in dir(d_loss) else d_loss)
+            r_losses.append(r_metric.cpu().item() if 'cpu' in dir(r_metric) else r_metric)
 
         if name == 'evaluate':
             val = -np.average(losses)
@@ -181,9 +188,13 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
                 best_val = val
                 print('\t\tSaving finished!')
         print('\t\tLoss: {:.5f}'.format(np.average(losses)))
-        print('\t\tRMSD Loss: {:.5f}'.format(np.average(d_losses)))
+        print('\t\tADJ3 loss: {:.5f}'.format(np.average(a_losses)))
+        print('\t\tDistance loss: {:.5f}'.format(np.average(d_losses)))
+        print('\t\tRMSD metric: {:.5f}'.format(np.average(r_losses)))
         logs[-1].update({'{}_loss'.format(name): np.average(losses)})
-        logs[-1].update({'{}_metric'.format(name): np.average(d_losses)})
+        logs[-1].update({'{}_adj3_metric'.format(name): np.average(a_losses)})
+        logs[-1].update({'{}_distance_metric'.format(name): np.average(d_losses)})
+        logs[-1].update({'{}_rmsd_metric'.format(name): np.average(r_losses)})
 
     for epoch in range(cfg['ITERATION']):
         logs.append({'epoch': epoch + 1})
