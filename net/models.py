@@ -275,12 +275,8 @@ class PositionEncoder(Module):
         node_edge_matrix, node_edge_mask = matrix_mask_tuple[2], matrix_mask_tuple[3]
 
         u_e_v_features = torch.cat([v_features[us], e_features, v_features[vs]], dim=1)
-        # print('uev:', u_e_v_features)
         e_weight = torch.diag(torch.sigmoid(self.e_encoder(u_e_v_features)).view([-1]))
-        # print('e weight:', e_weight)
-        # e = node_edge_matrix @ e_weight @ node_edge_matrix.t()
-        e = node_edge_matrix @ node_edge_matrix.t()
-        # print('e:', e)
+        e = node_edge_matrix @ e_weight @ node_edge_matrix.t()
         if self.use_mpnn:
             return self.position_producer(v_features, e_features, us, vs, matrix_mask_tuple)
         elif self.use_rdkit:
@@ -312,7 +308,7 @@ class PositionEncoder(Module):
 
         # Kabsch-RMSD
         k_pos, k_fit_pos = kabsch(pos, fit_pos, mol_node_matrix, use_cuda=self.use_cuda)
-        k_pos, k_fit_pos = k_pos.detach(), k_fit_pos.detach()
+        # k_pos, k_fit_pos = k_pos.detach(), k_fit_pos.detach()
         rmsd_loss = rmsd(k_pos, k_fit_pos, self.massive.forward(v_features))
 
         dis = (pos.unsqueeze(0) - pos.unsqueeze(1)).norm(dim=2)

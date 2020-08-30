@@ -113,11 +113,11 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
         us, vs, mm_tuple = matrix_cache.fetch(molecules, mask, nfs, name, use_cuda)
         mask_smiles = [smiles[i] for i in mask]
 
-        adj3_loss, dis_loss, rmsd_metric, s_loss, c_loss, pos = model.fit(nfs, efs, mask_smiles, us, vs, mm_tuple,
+        adj3_loss, dis_loss, rmsd_loss, s_loss, c_loss, pos = model.fit(nfs, efs, mask_smiles, us, vs, mm_tuple,
                                                                           atom_pos, print_mode=name == 'test0')
         if name == 'test0':
             visualize([smiles[i] for i in mask], pos, atom_pos, mm_tuple[0])
-        return adj3_loss, dis_loss, rmsd_metric, s_loss, c_loss
+        return adj3_loss, dis_loss, rmsd_loss, s_loss, c_loss
 
     def train(mask_list: list, name=None):
         model.train()
@@ -136,14 +136,15 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
             else:
                 name_ = None
             optimizer.zero_grad()
-            a_loss, d_loss, r_metric, s_loss, c_loss = forward(m, name=name_)
+            a_loss, d_loss, r_loss, s_loss, c_loss = forward(m, name=name_)
             a_losses.append(a_loss.cpu().item() if 'cpu' in dir(a_loss) else a_loss)
             d_losses.append(d_loss.cpu().item() if 'cpu' in dir(d_loss) else d_loss)
-            r_losses.append(r_metric.cpu().item() if 'cpu' in dir(r_metric) else r_metric)
+            r_losses.append(r_loss.cpu().item() if 'cpu' in dir(r_loss) else r_loss)
             s_losses.append(s_loss.cpu().item() if 'cpu' in dir(s_loss) else s_loss)
             c_losses.append(c_loss.cpu().item() if 'cpu' in dir(c_loss) else c_loss)
-            loss = a_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
+            # loss = a_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
             # loss = d_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
+            loss = r_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss + 0.001 * a_loss
             loss.backward()
             optimizer.step()
             nonlocal current_lr
@@ -171,13 +172,14 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
                 name_ = name + str(i)
             else:
                 name_ = None
-            a_loss, d_loss, r_metric, s_loss, c_loss = forward(m, name=name_)
-            loss = a_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
+            a_loss, d_loss, r_loss, s_loss, c_loss = forward(m, name=name_)
+            # loss = a_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
             # loss = d_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
+            loss = r_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss + 0.001 * a_loss
             losses.append(loss.cpu().item() if 'cpu' in dir(loss) else loss)
             a_losses.append(a_loss.cpu().item() if 'cpu' in dir(a_loss) else a_loss)
             d_losses.append(d_loss.cpu().item() if 'cpu' in dir(d_loss) else d_loss)
-            r_losses.append(r_metric.cpu().item() if 'cpu' in dir(r_metric) else r_metric)
+            r_losses.append(r_loss.cpu().item() if 'cpu' in dir(r_loss) else r_loss)
 
         if name == 'evaluate':
             val = -np.average(losses)
