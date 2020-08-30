@@ -17,6 +17,7 @@ FITTER_CONFIG = {
     'PQ_DIM': 32,
     'GAMMA_S': 0.000,
     'GAMMA_C': 0.000,
+    'GAMMA_A': 0.001,
     'DISSIPATE': True,
     'LSTM': True,
     'DISTURB': False,

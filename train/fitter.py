@@ -144,7 +144,7 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
             c_losses.append(c_loss.cpu().item() if 'cpu' in dir(c_loss) else c_loss)
             # loss = a_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
             # loss = d_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
-            loss = r_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss + 0.001 * a_loss
+            loss = r_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss + cfg['GAMMA_A'] * a_loss
             loss.backward()
             optimizer.step()
             nonlocal current_lr
@@ -175,7 +175,7 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
             a_loss, d_loss, r_loss, s_loss, c_loss = forward(m, name=name_)
             # loss = a_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
             # loss = d_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss
-            loss = r_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss + 0.001 * a_loss
+            loss = r_loss + cfg['GAMMA_S'] * s_loss + cfg['GAMMA_C'] * c_loss + cfg['GAMMA_A'] * a_loss
             losses.append(loss.cpu().item() if 'cpu' in dir(loss) else loss)
             a_losses.append(a_loss.cpu().item() if 'cpu' in dir(a_loss) else a_loss)
             d_losses.append(d_loss.cpu().item() if 'cpu' in dir(d_loss) else d_loss)
