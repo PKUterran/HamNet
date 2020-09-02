@@ -64,7 +64,7 @@ class AMPNN(Module):
                                     radius=self.m_radius, use_cuda=use_cuda, dropout=self.dropout)
 
     def forward(self, node_features: torch.Tensor, edge_features: torch.Tensor, us: list, vs: list,
-                matrix_mask_tuple: tuple, name: str = '') -> (torch.Tensor, torch.Tensor):
+                matrix_mask_tuple: tuple, name: str = '', smiles: list = None) -> (torch.Tensor, torch.Tensor):
         assert edge_features.shape[0] == len(us) and edge_features.shape[0] == len(vs), \
             '{}, {}, {}.'.format(edge_features.shape, len(us), len(vs))
         if edge_features.shape[0] == 0:
@@ -72,7 +72,7 @@ class AMPNN(Module):
 
         if self.position_encoders[0] is not None:
             pos_features = self.position_encoders[0].transform(node_features, edge_features, us, vs,
-                                                               matrix_mask_tuple, name)[0]
+                                                               matrix_mask_tuple, name, smiles)[0]
             if self.q_only:
                 pos_features = pos_features * self.temp_mask
             uv_pos_features = pos_features[us] - pos_features[vs]
@@ -325,13 +325,13 @@ class PositionEncoder(Module):
         return adj3_loss, dis_loss, rmsd_loss, s_loss, c_loss, pos
 
     def transform(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list,
-                  matrix_mask_tuple: tuple, name=''):
+                  matrix_mask_tuple: tuple, name='', smiles=None):
         assert not self.use_rdkit
         if name and name in self.cache.keys():
             # print('cache hit:', name)
             pq = self.cache[name]
         else:
-            p, q, _, _, _, _ = self(v_features, e_features, us, vs, matrix_mask_tuple)
+            p, q, _, _, _, _ = self(v_features, e_features, us, vs, matrix_mask_tuple, smiles)
             pq = torch.cat([p.detach(), q.detach()], dim=1)
             if name:
                 # print('new cache:', name)

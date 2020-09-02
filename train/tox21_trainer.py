@@ -105,7 +105,7 @@ def train_tox21(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
 
         us, vs, mm_tuple = matrix_cache.fetch(molecules, mask, nfs, name, use_cuda)
 
-        embeddings, _ = model(nfs, efs, us, vs, mm_tuple, name)
+        embeddings, _ = model(nfs, efs, us, vs, mm_tuple, name, [smiles[i] for i in mask])
         std_loss = 0
         logits = classifier(embeddings) * not_nan[mask, :]
         target = properties[mask, :]

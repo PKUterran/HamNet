@@ -105,7 +105,7 @@ def train_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_
 
         us, vs, mm_tuple = matrix_cache.fetch(molecules, mask, nfs, name, use_cuda)
 
-        embeddings, _ = model(nfs, efs, us, vs, mm_tuple, name)
+        embeddings, _ = model(nfs, efs, us, vs, mm_tuple, name, [smiles[i] for i in mask])
         std_loss = 0
         logits = regression(embeddings)
         target = norm_properties[mask, :]
