@@ -16,5 +16,5 @@ train_tox21(seed=seed,
             use_tqdm=False,
             force_save=False,
             position_encoder_path=PE_PATH if pos else '',
-            tag='tox21_pos@{}'.format(seed) if pos else 'lipop_nopos@{}'.format(seed),
+            tag='tox21_pos@{}'.format(seed) if pos else 'tox21_nopos@{}'.format(seed),
             )
