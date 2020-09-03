@@ -16,12 +16,12 @@ tag_path = (
     # ['pos no lstm', ['pos/0821-nolstm.json'], False],
     # ['tox21 no pos', ['TOX21/tox21_nopos@{}.json'.format(seed) for seed in SEEDS], True],
     # ['tox21 pos', ['TOX21/tox21_pos@{}.json'.format(seed) for seed in SEEDS], True],
-    ['lipop no pos', ['Lipop/lipop_nopos@{}.json'.format(seed) for seed in SEEDS[4:5]], False],
-    ['lipop pos', ['Lipop/lipop_pos@{}.json'.format(seed) for seed in SEEDS[4:5]], False],
-    # ['QM9 no pos', ['QM9/qm9_nopos.json'], False],
-    # ['QM9 3 pos', ['QM9/qm9_3pos.json'], False],
-    # ['QM9 pos', ['QM9/qm9_pos.json'], False],
-    # ['QM9 q only', ['QM9/qm9_q_only.json'], False],
+    ['lipop no pos', ['Lipop/lipop_nopos@{}.json'.format(seed) for seed in SEEDS], False],
+    ['lipop pos', ['Lipop/lipop_pos@{}.json'.format(seed) for seed in SEEDS], False],
+    # ['QM9 no pos', ['QM9/qm9_nopos@16880611.json'], False],
+    # ['QM9 3 pos', ['QM9/qm9_3pos@16880611.json'], False],
+    # ['QM9 pos', ['QM9/qm9_pos@16880611.json'], False],
+    # ['QM9 q only', ['QM9/qm9_q_only@16880611.json'], False],
 )
 
 for tag, paths, higher_is_better in tag_path:

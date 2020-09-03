@@ -65,14 +65,14 @@ MODEL_CONFIG_QM9.update({
 MODEL_CONFIG_LIPOP = MODEL_CONFIG.copy()
 MODEL_CONFIG_LIPOP.update({
     'LR': 10 ** -2.5,
-    'DECAY': 10 ** -3.5,
-    'DROPOUT': 0.7,
+    'DECAY': 10 ** -4.0,
+    'DROPOUT': 0.2,
     'ITERATION': 200,
     'BATCH': 20,
     'EVAL': 2000,
-    'HE_DIM': 256,
-    'C_DIMS': [256, 256],
-    'F_DIM': 256,
+    'HE_DIM': 200,
+    'C_DIMS': [200, 200, 200],
+    'F_DIM': 200,
     'M_RADIUS': 4,
 })
 
