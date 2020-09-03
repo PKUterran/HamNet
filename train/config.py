@@ -65,8 +65,8 @@ MODEL_CONFIG_QM9.update({
 MODEL_CONFIG_LIPOP = MODEL_CONFIG.copy()
 MODEL_CONFIG_LIPOP.update({
     'LR': 10 ** -2.5,
-    'DECAY': 10 ** -5.0,
-    'DROPOUT': 0.2,
+    'DECAY': 10 ** -3.5,
+    'DROPOUT': 0.7,
     'ITERATION': 200,
     'BATCH': 20,
     'EVAL': 2000,
