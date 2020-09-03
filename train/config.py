@@ -74,6 +74,7 @@ MODEL_CONFIG_LIPOP.update({
     'C_DIMS': [200, 200, 200],
     'F_DIM': 200,
     'M_RADIUS': 4,
+    'MLP_DIMS': [],
 })
 
 MODEL_CONFIG_TOX21 = MODEL_CONFIG.copy()
