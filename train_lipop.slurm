@@ -21,8 +21,8 @@ python train_lipop.py --seed 17760704 --pos 1
 python train_lipop.py --seed 17890714 --pos 1
 python train_lipop.py --seed 19491001 --pos 1
 python train_lipop.py --seed 19900612 --pos 1
-# python train_lipop.py --seed 16880611 --pos 2
-# python train_lipop.py --seed 17760704 --pos 2
-# python train_lipop.py --seed 17890714 --pos 2
-# python train_lipop.py --seed 19491001 --pos 2
-# python train_lipop.py --seed 19900612 --pos 2
+python train_lipop.py --seed 16880611 --pos 2
+python train_lipop.py --seed 17760704 --pos 2
+python train_lipop.py --seed 17890714 --pos 2
+python train_lipop.py --seed 19491001 --pos 2
+python train_lipop.py --seed 19900612 --pos 2
