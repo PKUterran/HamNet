@@ -115,7 +115,7 @@ train_lipop(use_cuda=True,
             limit=-1,
             use_tqdm=True,
             force_save=True,
-            position_encoder_path='net/test0821-rdkit.pt',
+            position_encoder_path='net/rdkit.pt',
             tag='pos',
             )
 # train_lipop(use_cuda=True,
