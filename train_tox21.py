@@ -16,7 +16,7 @@ if pos == 1:
     tag = 'tox21_pos@{}'.format(seed)
 elif pos == 2:
     pep = RDKIT_PATH
-    tag = 'tox21_rdpos@{}'.format(seed),
+    tag = 'tox21_rdpos@{}'.format(seed)
 else:
     pep = ''
     tag = 'tox21_nopos@{}'.format(seed)
