@@ -9,12 +9,24 @@ seed = arg.seed
 pos = arg.pos
 
 PE_PATH = 'net/0821.pt'
+RDKIT_PATH = 'net/rdkit.pt'
+
+if pos == 1:
+    pep = PE_PATH
+    tag = 'tox21_pos@{}'.format(seed)
+elif pos == 2:
+    pep = RDKIT_PATH
+    tag = 'tox21_rdpos@{}'.format(seed),
+else:
+    pep = ''
+    tag = 'tox21_nopos@{}'.format(seed)
+
 
 train_tox21(seed=seed,
             use_cuda=True,
             limit=-1,
             use_tqdm=False,
             force_save=False,
-            position_encoder_path=PE_PATH if pos else '',
-            tag='tox21_pos@{}'.format(seed) if pos else 'tox21_nopos@{}'.format(seed),
+            position_encoder_path=pep,
+            tag=tag,
             )

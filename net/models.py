@@ -35,6 +35,8 @@ class AMPNN(Module):
             self.pos_trans = Linear(3, self.pos_dim)
         elif position_encoder:
             self.pos_dim = config['POS_DIM']
+            if position_encoder.use_rdkit:
+                self.pos_dim = 3
         else:
             self.pos_dim = 0
         self.q_only = q_only
@@ -326,13 +328,15 @@ class PositionEncoder(Module):
 
     def transform(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list,
                   matrix_mask_tuple: tuple, name='', smiles=None):
-        assert not self.use_rdkit
         if name and name in self.cache.keys():
             # print('cache hit:', name)
             pq = self.cache[name]
         else:
-            p, q, _, _, _, _ = self(v_features, e_features, us, vs, matrix_mask_tuple, smiles)
-            pq = torch.cat([p.detach(), q.detach()], dim=1)
+            if self.use_rdkit:
+                pq = self(v_features, e_features, us, vs, matrix_mask_tuple, smiles)
+            else:
+                p, q, _, _, _, _ = self(v_features, e_features, us, vs, matrix_mask_tuple, smiles)
+                pq = torch.cat([p.detach(), q.detach()], dim=1)
             if name:
                 # print('new cache:', name)
                 self.cache[name] = pq
