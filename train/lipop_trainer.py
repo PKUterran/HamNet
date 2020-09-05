@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from .config import MODEL_CONFIG_LIPOP as DEFAULT_CONFIG
 from .HeteroGraph import HeteroGraph
-from data.reader import load_lipop
+from data.reader import load_lipop, load_freesolv
 from utils.sample import sample
 from utils.cache import MatrixCache
 from net.models import MLP, AMPNN
@@ -30,7 +30,7 @@ def set_seed(seed: int, use_cuda: bool):
 
 def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tqdm=True,
                 force_save=False, special_config: dict = None,
-                position_encoder_path: str = 'net/pe.pt', tag='std'):
+                position_encoder_path: str = 'net/pe.pt', tag='std', dataset='Lipop'):
     cfg = DEFAULT_CONFIG.copy()
     if special_config:
         cfg.update(special_config)
@@ -39,7 +39,10 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
     set_seed(seed, use_cuda)
     np.set_printoptions(precision=4, suppress=True, linewidth=140)
 
-    smiles, info_list, properties = load_lipop(limit, force_save=force_save)
+    if dataset == 'FreeSolv':
+        smiles, info_list, properties = load_freesolv(limit, force_save=force_save)
+    else:
+        smiles, info_list, properties = load_lipop(limit, force_save=force_save)
     molecules = [HeteroGraph(info['nf'], info['ef'], info['us'], info['vs'], info['em']) for info in info_list]
     n_dim = molecules[0].n_dim
     e_dim = molecules[0].e_dim

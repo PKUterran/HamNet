@@ -17,10 +17,15 @@ tag_path = (
     ['tox21 no pos', ['TOX21/tox21_nopos@{}.json'.format(seed) for seed in SEEDS], True],
     ['tox21 pos', ['TOX21/tox21_pos@{}.json'.format(seed) for seed in SEEDS], True],
     ['tox21 rdpos', ['TOX21/tox21_rdpos@{}.json'.format(seed) for seed in SEEDS], True],
-    ['lipop no pos', ['Lipop/best/lipop_nopos@{}.json'.format(seed) for seed in SEEDS], False],
-    ['lipop pos', ['Lipop/best/lipop_pos@{}.json'.format(seed) for seed in SEEDS], False],
+    ['lipop no pos', ['Lipop/lipop_nopos@{}.json'.format(seed) for seed in SEEDS], False],
+    ['lipop pos', ['Lipop/lipop_pos@{}.json'.format(seed) for seed in SEEDS], False],
+    ['lipop rdpos', ['Lipop/lipop_rdpos@{}.json'.format(seed) for seed in SEEDS], False],
+    ['freesolv no pos', ['Lipop/freesolv_nopos@{}.json'.format(seed) for seed in SEEDS], False],
+    ['freesolv pos', ['Lipop/freesolv_pos@{}.json'.format(seed) for seed in SEEDS], False],
+    ['freesolv rdpos', ['Lipop/freesolv_rdpos@{}.json'.format(seed) for seed in SEEDS], False],
     # ['lipop no pos', ['Lipop/lipop_nopos@16880611.json'], False],
     # ['lipop pos', ['Lipop/lipop_pos@16880611.json'], False],
+    # ['lipop rdpos', ['Lipop/lipop_rdpos@16880611.json'], False],
     # ['lipop no pos', ['Lipop/lipop_nopos@17760704.json'], False],
     # ['lipop pos', ['Lipop/lipop_pos@17760704.json'], False],
     # ['lipop no pos', ['Lipop/lipop_nopos@17890714.json'], False],
@@ -57,4 +62,6 @@ for tag, paths, higher_is_better in tag_path:
             cor_tests.append(cor_test)
             # print('{}: {}'.format(tag, cor_test))
 
-    print('{}: {:.5f}'.format(tag, np.average(cor_tests)))
+    avg = np.average(cor_tests)
+    bound = np.max(np.abs([c - avg for c in cor_tests]))
+    print('{}: {:.3f} +- {:.3f}'.format(tag, avg, bound))

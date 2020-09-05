@@ -111,12 +111,21 @@ from train.tox21_trainer import train_tox21
 #           tag='qm9_dropout5_pos'
 #           )
 
+# train_lipop(use_cuda=True,
+#             limit=-1,
+#             use_tqdm=True,
+#             force_save=True,
+#             position_encoder_path='net/rdkit.pt',
+#             tag='pos',
+#             )
+
 train_lipop(use_cuda=True,
             limit=-1,
             use_tqdm=True,
             force_save=True,
-            position_encoder_path='net/rdkit.pt',
-            tag='pos',
+            position_encoder_path='net/test0824.pt',
+            tag='test-freesolv',
+            dataset='FreeSolv',
             )
 # train_lipop(use_cuda=True,
 #             limit=-1,

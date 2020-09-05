@@ -14,6 +14,8 @@ HIV_CSV_FILE = 'data/HIV/HIV.csv'
 HIV_RESOURCE_FILE = 'data/HIV/hiv.pickle'
 LIPOP_CSV_FILE = 'data/Lipop/Lipophilicity.csv'
 LIPOP_RESOURCE_FILE = 'data/Lipop/Lipop.pickle'
+FREESOLV_CSV_FILE = 'data/FreeSolv/SAMPL.csv'
+FREESOLV_RESOURCE_FILE = 'data/FreeSolv/FreeSolv.pickle'
 BBBP_CSV_FILE = 'data/BBBP/BBBP.csv'
 # BBBP_RESOURCE_FILE = 'data/BBBP/BBBP.pickle'
 TOX21_CSV_FILE = 'data/TOX21/tox21.csv'
@@ -107,6 +109,22 @@ def load_lipop(max_num: int = -1, force_save=False) -> (list, list, np.ndarray):
         pickle.dump(info_list, open(LIPOP_RESOURCE_FILE, 'wb'))
     else:
         info_list = pickle.load(open(LIPOP_RESOURCE_FILE, 'rb'))
+
+    if max_num != -1 and max_num < smile_properties_list.shape[0]:
+        info_list = info_list[: max_num]
+        properties = properties[: max_num]
+    return smiles, info_list, properties
+
+
+def load_freesolv(max_num: int = -1, force_save=False) -> (list, list, np.ndarray):
+    smile_properties_list = np.array(pd.read_csv(FREESOLV_CSV_FILE))
+    properties = smile_properties_list[:, 2: 3]
+    smiles = smile_properties_list[:, 1]
+    if force_save or not os.path.exists(FREESOLV_RESOURCE_FILE):
+        info_list = encode_smiles(smiles)
+        pickle.dump(info_list, open(FREESOLV_RESOURCE_FILE, 'wb'))
+    else:
+        info_list = pickle.load(open(FREESOLV_RESOURCE_FILE, 'rb'))
 
     if max_num != -1 and max_num < smile_properties_list.shape[0]:
         info_list = info_list[: max_num]
