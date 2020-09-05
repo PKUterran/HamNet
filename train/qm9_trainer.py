@@ -22,7 +22,7 @@ LOG_PATH = 'logs/QM9/'
 
 
 def set_seed(seed: int, use_cuda: bool):
-    np.random.seed(seed)
+    np.random.seed(20201002)
     torch.manual_seed(seed)
     if use_cuda:
         torch.cuda.manual_seed(seed)

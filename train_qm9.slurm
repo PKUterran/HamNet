@@ -11,8 +11,8 @@
 
 # module add anaconda/3-5.0.0.1
 # source activate ysw_pytorch
-# python train_qm9.py --seed 16880611
-# python train_qm9.py --seed 17760704
+python train_qm9.py --seed 16880611
+python train_qm9.py --seed 17760704
 python train_qm9.py --seed 17890714
 python train_qm9.py --seed 19491001
 python train_qm9.py --seed 19900612
