@@ -79,8 +79,8 @@ MODEL_CONFIG_LIPOP.update({
 
 MODEL_CONFIG_TOX21 = MODEL_CONFIG.copy()
 MODEL_CONFIG_TOX21.update({
-    'LR': 10 ** -3.0,
-    'DECAY': 10 ** -4.5,
+    'LR': 10 ** -4.0,
+    'DECAY': 10 ** -4.0,
     'DROPOUT': 0.5,
     'ITERATION': 400,
     'BATCH': 20,
@@ -89,6 +89,7 @@ MODEL_CONFIG_TOX21.update({
     'C_DIMS': [200, 200, 200],
     'F_DIM': 200,
     'M_RADIUS': 3,
+    'MLP_DIMS': [],
 })
 
 
