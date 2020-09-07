@@ -118,7 +118,7 @@ def load_lipop(max_num: int = -1, force_save=False) -> (list, list, np.ndarray):
 
 def load_freesolv(max_num: int = -1, force_save=False) -> (list, list, np.ndarray):
     smile_properties_list = np.array(pd.read_csv(FREESOLV_CSV_FILE))
-    properties = smile_properties_list[:, 3: 4]
+    properties = smile_properties_list[:, 2: 3]
     smiles = smile_properties_list[:, 1]
     if force_save or not os.path.exists(FREESOLV_RESOURCE_FILE):
         info_list = encode_smiles(smiles)
