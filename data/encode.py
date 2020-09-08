@@ -197,6 +197,16 @@ def encode_smiles(smiles: np.ndarray, return_mask=False,
     return ret
 
 
+def get_features_from_smiles(smiles):
+    mol = Chem.MolFromSmiles(smiles)
+    nf = np.stack([atom_features(a) for i, a in enumerate(mol.GetAtoms())])
+    ef = np.stack([bond_features(b) for b in mol.GetBonds()]) \
+        if len(mol.GetBonds()) else np.zeros(shape=[0, 10], dtype=np.int)
+    us = np.array([b.GetBeginAtomIdx() for b in mol.GetBonds()], dtype=np.int)
+    vs = np.array([b.GetEndAtomIdx() for b in mol.GetBonds()], dtype=np.int)
+    return nf, ef, us, vs
+
+
 def get_central_atoms_dis(mol, atoms_num, max_dis) -> (np.ndarray, int):
     n = len(mol.GetAtoms())
     distance_matrix = np.array(Chem.GetDistanceMatrix(mol), dtype=np.int)

@@ -14,6 +14,7 @@ from .layers import ConcatMesPassing, PosConcatMesPassing, MolGATMesPassing, GRU
 from visualize.trajectory import plt_trajectory
 from utils.func import re_index
 from utils.kabsch import kabsch, rmsd
+from data.encode import get_features_from_smiles
 
 
 class AMPNN(Module):
@@ -201,7 +202,7 @@ class HamiltonianPositionProducer(Module):
         self.derivation = DissipativeHamiltonianDerivation(n_dim, self.p_dim, self.q_dim,
                                                            use_cuda=use_cuda, dropout=0.0)
 
-    def forward(self, v_features, e, mol_node_matrix, mol_node_mask):
+    def forward(self, v_features, e, mol_node_matrix, mol_node_mask, return_multi=False):
         p0, q0 = self.pq_encoder(v_features, mol_node_matrix, e)
         ps = [p0]
         qs = [q0]
@@ -228,6 +229,8 @@ class HamiltonianPositionProducer(Module):
         final_p = sum(ps) / len(ps)
         final_q = sum(qs) / len(qs)
 
+        if return_multi:
+            return ps, qs, s_loss, c_loss, h, d
         return final_p, final_q, s_loss, c_loss, h, d
 
 
@@ -272,7 +275,7 @@ class PositionEncoder(Module):
         self.cache = {}
 
     def forward(self, v_features: torch.Tensor, e_features: torch.Tensor, us: list, vs: list, matrix_mask_tuple: tuple,
-                smiles: list):
+                smiles: list, return_multi=False):
         mol_node_matrix, mol_node_mask = matrix_mask_tuple[0], matrix_mask_tuple[1]
         node_edge_matrix, node_edge_mask = matrix_mask_tuple[2], matrix_mask_tuple[3]
 
@@ -285,7 +288,7 @@ class PositionEncoder(Module):
             assert len(smiles)
             return self.position_producer(smiles)
         else:
-            return self.position_producer(v_features, e, mol_node_matrix, mol_node_mask)
+            return self.position_producer(v_features, e, mol_node_matrix, mol_node_mask, return_multi)
 
     def fit(self, v_features: torch.Tensor, e_features: torch.Tensor, smiles: list, us: list, vs: list,
             matrix_mask_tuple: tuple, fit_pos: torch.Tensor, print_mode=False):
@@ -341,6 +344,33 @@ class PositionEncoder(Module):
                 # print('new cache:', name)
                 self.cache[name] = pq
         return pq, 0, 0
+
+    def produce(self, smiles: str):
+        nf, ef, us, vs = get_features_from_smiles(smiles)
+        nf, ef = torch.from_numpy(nf).type(torch.float32), torch.from_numpy(ef).type(torch.float32)
+        us, vs = us.tolist(), vs.tolist()
+        nn = nf.shape[0]
+        ms = [0] * nn
+        mol_node_matrix, mol_node_mask = \
+            AMPNN.produce_node_edge_matrix(max(ms) + 1, ms, ms, [1] * len(ms))
+        node_edge_matrix_global, node_edge_mask_global = \
+            AMPNN.produce_node_edge_matrix(nn, us, vs, [1] * len(us))
+        if self.use_cuda:
+            nf = nf.cuda()
+            ef = ef.cuda()
+            mol_node_matrix = mol_node_matrix.cuda()
+            mol_node_mask = mol_node_mask.cuda()
+            node_edge_matrix_global = node_edge_matrix_global.cuda()
+            node_edge_mask_global = node_edge_mask_global.cuda()
+        matrix_mask_tuple = (mol_node_matrix, mol_node_mask,
+                             node_edge_matrix_global, node_edge_mask_global,
+                             )
+
+        if self.use_rdkit:
+            return self(nf, ef, us, vs, matrix_mask_tuple, [smiles]).detach().cpu().numpy()
+        else:
+            _, qs, _, _, _, _ = self(nf, ef, us, vs, matrix_mask_tuple, [smiles], return_multi=True)
+        return [self.dn23(q).detach().cpu().numpy() for q in qs]
 
     def verbose_print(self, ps, qs, mnm, nem, us, vs, verbose):
         if self.use_cuda:
