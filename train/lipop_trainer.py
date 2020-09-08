@@ -165,7 +165,8 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
                 target_list.append(target.cpu().detach().numpy())
 
         mse_loss = np.average(losses)
-        rmse_loss = np.average([l ** 0.5 for l in losses])
+        # rmse_loss = np.average([l ** 0.5 for l in losses])
+        rmse_loss = np.average(losses) ** 0.5
         print('\t\tMSE Loss: {:.3f}'.format(mse_loss))
         print('\t\tRMSE Loss: {:.3f}'.format(rmse_loss))
         logs[-1].update({'{}_loss'.format(name): mse_loss})
