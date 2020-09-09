@@ -33,6 +33,7 @@ if __name__ == '__main__':
         qs = pe.produce(smiles)
         for i, q in enumerate(qs):
             output('{}-{}'.format(tag, i), smiles, q.tolist())
+        output('{}-g'.format(tag), smiles, (sum(qs) / len(qs)).tolist())
 
         pos = rdk.produce(smiles)
         output('{}-rdk'.format(tag), smiles, pos.tolist())

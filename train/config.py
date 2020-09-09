@@ -8,12 +8,12 @@ FITTER_CONFIG = {
 
     'LR': 1e-4,
     'DECAY': 4e-5,
-    'DROPOUT': 0.5,
+    'DROPOUT': 0.2,
     'ITERATION': 30,
     'BATCH': 32,
 
     'HGN_LAYERS': 20,
-    'TAU': 0.01,
+    'TAU': 0.1,
     'PQ_DIM': 32,
     'GAMMA_S': 0.000,
     'GAMMA_C': 0.000,
