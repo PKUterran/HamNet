@@ -1,16 +1,16 @@
 from train.fitter import fit_qm9
 
 # rdkit
-# TAG = 'rdkit'
-# fit_qm9(use_cuda=True,
-#         limit=-1,
-#         use_tqdm=False,
-#         force_save=True,
-#         model_save_path='net/{}.pt'.format(TAG),
-#         special_config={'ITERATION': 1},
-#         tag=TAG,
-#         use_rdkit=True,
-#         )
+TAG = 'rdkit'
+fit_qm9(use_cuda=True,
+        limit=-1,
+        use_tqdm=False,
+        force_save=True,
+        model_save_path='net/{}.pt'.format(TAG),
+        special_config={'ITERATION': 1},
+        tag=TAG,
+        use_rdkit=True,
+        )
 
 # normal
 TAG = '0909'
@@ -56,22 +56,23 @@ fit_qm9(use_cuda=True,
         )
 
 # use MPNN to encode p & q
-# TAG = '0821-mpnn'
-# fit_qm9(use_cuda=True,
-#         limit=-1,
-#         use_tqdm=False,
-#         force_save=False,
-#         model_save_path='net/{}.pt'.format(TAG),
-#         mpnn_pos_encode=True,
-#         tag=TAG,
-#         )
+TAG = '0909-mpnn'
+fit_qm9(use_cuda=True,
+        limit=-1,
+        use_tqdm=False,
+        force_save=False,
+        model_save_path='net/{}.pt'.format(TAG),
+        mpnn_pos_encode=True,
+        tag=TAG,
+        )
 
-# TAG = '0821-noadj'
-# fit_qm9(use_cuda=True,
-#         limit=-1,
-#         use_tqdm=False,
-#         force_save=False,
-#         model_save_path='net/{}.pt'.format(TAG),
-#         special_config={'GAMMA_A': 0.000},
-#         tag=TAG,
-#         )
+# no ADJ3 loss
+TAG = '0909-noadj'
+fit_qm9(use_cuda=True,
+        limit=-1,
+        use_tqdm=False,
+        force_save=False,
+        model_save_path='net/{}.pt'.format(TAG),
+        special_config={'GAMMA_A': 0.000},
+        tag=TAG,
+        )
