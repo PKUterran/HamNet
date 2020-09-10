@@ -86,3 +86,42 @@ def load_mol_atom_pos(max_num: int = -1) -> list:
 
     return mol_atom_pos
 
+
+def load_mol_atom_pos_symbol(max_num: int = -1) -> (list, list):
+    mol_atom_pos = []
+    mol_atom_symbol = []
+    cnt = 0
+
+    with open('data/gdb9/gdb9.sdf') as content:
+        while True:
+            lines = []
+            atom_pos = []
+            atom_symbol = []
+            while True:
+                line = content.readline()
+                if not line:
+                    break
+                line = line.strip()
+                lines.append(line)
+                if line == '$$$$':
+                    break
+            if len(lines) == 0:
+                break
+            n, *_ = [int(t) for t in lines[3].split()[:8]]
+            for i in range(4, 4 + n):
+                x, y, z, a, *_ = lines[i].split()
+                if a == 'H':
+                    continue
+                atom_pos.append([x, y, z])
+                atom_symbol.append(a)
+            mol_atom_pos.append(np.array(atom_pos, dtype=np.float))
+            mol_atom_symbol.append(atom_symbol)
+
+            cnt += 1
+            if cnt % 1e4 == 0:
+                print(cnt, 'loaded.')
+            if max_num != -1 and cnt >= max_num:
+                break
+
+    return mol_atom_pos, mol_atom_symbol
+

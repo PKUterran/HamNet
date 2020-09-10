@@ -43,6 +43,15 @@ def fit_qm9(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, use_tq
 
     smiles, info_list, _ = load_qm9(limit, force_save=force_save)
     mol_atom_pos = load_mol_atom_pos(limit)
+
+    with open('data/gdb9/incons.json') as fp:
+        incons = json.load(fp)
+        left = list(set(range(len(smiles))) - set(incons))
+        print('{} / {}'.format(len(left), len(smiles)))
+        smiles = [smiles[i] for i in left]
+        info_list = [info_list[i] for i in left]
+        mol_atom_pos = [mol_atom_pos[i] for i in left]
+
     molecules = [HeteroGraph(info['nf'], info['ef'], info['us'], info['vs'], info['em']) for info in info_list]
     n_dim = molecules[0].n_dim
     e_dim = molecules[0].e_dim

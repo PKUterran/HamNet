@@ -367,7 +367,10 @@ class PositionEncoder(Module):
                              )
 
         if self.use_rdkit:
-            return self(nf, ef, us, vs, matrix_mask_tuple, [smiles]).detach().cpu().numpy()
+            pos = self(nf, ef, us, vs, matrix_mask_tuple, [smiles]).detach().cpu().numpy()
+            tack = np.random.normal(0, 0.2, pos.shape)
+            return pos + tack
+            # return pos
         else:
             _, qs, _, _, _, _ = self(nf, ef, us, vs, matrix_mask_tuple, [smiles], return_multi=True)
         return [self.dn23(q).detach().cpu().numpy() for q in qs]

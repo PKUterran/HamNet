@@ -13,7 +13,7 @@ FITTER_CONFIG = {
     'BATCH': 32,
 
     'HGN_LAYERS': 20,
-    'TAU': 0.1,
+    'TAU': 0.025,
     'PQ_DIM': 32,
     'GAMMA_S': 0.000,
     'GAMMA_C': 0.000,
