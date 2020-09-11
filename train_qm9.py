@@ -6,7 +6,7 @@ parser.add_argument('--seed', type=int, default=12345)
 arg = parser.parse_args()
 seed = arg.seed
 
-PE_PATH = 'net/0821.pt'
+PE_PATH = 'net/0909.pt'
 
 train_qm9(seed=seed,
           use_cuda=True,

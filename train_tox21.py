@@ -8,7 +8,7 @@ arg = parser.parse_args()
 seed = arg.seed
 pos = arg.pos
 
-PE_PATH = 'net/0821.pt'
+PE_PATH = 'net/0909.pt'
 RDKIT_PATH = 'net/rdkit.pt'
 
 if pos == 1:
