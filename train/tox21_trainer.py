@@ -22,7 +22,7 @@ TOX21_GRAPH_PATH = 'graphs/TOX21/'
 
 
 def set_seed(seed: int, use_cuda: bool):
-    np.random.seed(16880611)
+    np.random.seed(19700101)
     torch.manual_seed(seed)
     if use_cuda:
         torch.cuda.manual_seed(seed)
