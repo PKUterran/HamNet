@@ -368,7 +368,7 @@ class PositionEncoder(Module):
 
         if self.use_rdkit:
             pos = self(nf, ef, us, vs, matrix_mask_tuple, [smiles]).detach().cpu().numpy()
-            tack = np.random.normal(0, 0.2, pos.shape)
+            tack = np.random.normal(0, 0.1, pos.shape)
             return pos + tack
             # return pos
         else:

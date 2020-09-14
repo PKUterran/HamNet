@@ -42,10 +42,10 @@ tag_path = (
     ['QM9 3 pos', ['QM9/qm9_3pos@16880611.json'], False],
     ['QM9 pos', ['QM9/qm9_pos@16880611.json'], False],
     ['QM9 q only', ['QM9/qm9_q_only@16880611.json'], False],
-    # ['QM9 no pos', ['QM9/qm9_nopos@17760704.json'], False],
-    # ['QM9 3 pos', ['QM9/qm9_3pos@17760704.json'], False],
-    # ['QM9 pos', ['QM9/qm9_pos@17760704.json'], False],
-    # ['QM9 q only', ['QM9/qm9_q_only@17760704.json'], False],
+    ['QM9 no pos', ['QM9/qm9_nopos@17760704.json'], False],
+    ['QM9 3 pos', ['QM9/qm9_3pos@17760704.json'], False],
+    ['QM9 pos', ['QM9/qm9_pos@17760704.json'], False],
+    ['QM9 q only', ['QM9/qm9_q_only@17760704.json'], False],
 )
 
 for tag, paths, higher_is_better in tag_path:
