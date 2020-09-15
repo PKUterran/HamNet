@@ -3,8 +3,10 @@ import numpy as np
 import torch.autograd as autograd
 
 
-def kabsch(pos: torch.Tensor, fit_pos: torch.Tensor, mol_node_matrix: torch.Tensor, use_cuda=False) \
+def kabsch(pos: torch.Tensor, fit_pos: torch.Tensor, mol_node_matrix: torch.Tensor=None, use_cuda=False) \
         -> (torch.Tensor, torch.Tensor):
+    if mol_node_matrix is None:
+        mol_node_matrix = torch.ones([1, pos.shape[0]]).type(torch.float32)
     pos_list = []
     fit_pos_list = []
     for mask in mol_node_matrix:
