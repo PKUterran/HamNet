@@ -8,7 +8,7 @@ arg = parser.parse_args()
 seed = arg.seed
 pos = arg.pos
 
-PE_PATH = 'net/0821.pt'
+PE_PATH = 'net/0909.pt'
 RDKIT_PATH = 'net/rdkit.pt'
 
 if pos == 1:
@@ -30,15 +30,15 @@ train_lipop(seed=seed,
             tag=tag,
             dataset='FreeSolv',
             special_config={
-                'LR': 10 ** -3.0,
+                'LR': 10 ** -4.0,
                 'DECAY': 10 ** -3.0,
                 'DROPOUT': 0.5,
                 'ITERATION': 50,
                 'BATCH': 16,
                 'EVAL': 2000,
-                'HE_DIM': 64,
-                'C_DIMS': [64, 64],
-                'F_DIM': 64,
+                'HE_DIM': 120,
+                'C_DIMS': [120, 120],
+                'F_DIM': 120,
                 'M_RADIUS': 2,
             },
             )

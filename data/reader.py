@@ -16,6 +16,8 @@ LIPOP_CSV_FILE = 'data/Lipop/Lipophilicity.csv'
 LIPOP_RESOURCE_FILE = 'data/Lipop/Lipop.pickle'
 FREESOLV_CSV_FILE = 'data/FreeSolv/SAMPL.csv'
 FREESOLV_RESOURCE_FILE = 'data/FreeSolv/FreeSolv.pickle'
+ESOL_CSV_FILE = 'data/ESOL/delaney-processed.csv'
+ESOL_RESOURCE_FILE = 'data/ESOL/ESOL.pickle'
 BBBP_CSV_FILE = 'data/BBBP/BBBP.csv'
 # BBBP_RESOURCE_FILE = 'data/BBBP/BBBP.pickle'
 TOX21_CSV_FILE = 'data/TOX21/tox21.csv'
@@ -125,6 +127,22 @@ def load_freesolv(max_num: int = -1, force_save=False) -> (list, list, np.ndarra
         pickle.dump(info_list, open(FREESOLV_RESOURCE_FILE, 'wb'))
     else:
         info_list = pickle.load(open(FREESOLV_RESOURCE_FILE, 'rb'))
+
+    if max_num != -1 and max_num < smile_properties_list.shape[0]:
+        info_list = info_list[: max_num]
+        properties = properties[: max_num]
+    return smiles, info_list, properties
+
+
+def load_esol(max_num: int = -1, force_save=False) -> (list, list, np.ndarray):
+    smile_properties_list = np.array(pd.read_csv(ESOL_CSV_FILE))
+    properties = smile_properties_list[:, 8: 9]
+    smiles = smile_properties_list[:, 9]
+    if force_save or not os.path.exists(ESOL_RESOURCE_FILE):
+        info_list = encode_smiles(smiles)
+        pickle.dump(info_list, open(ESOL_RESOURCE_FILE, 'wb'))
+    else:
+        info_list = pickle.load(open(ESOL_RESOURCE_FILE, 'rb'))
 
     if max_num != -1 and max_num < smile_properties_list.shape[0]:
         info_list = info_list[: max_num]

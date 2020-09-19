@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from .config import MODEL_CONFIG_LIPOP as DEFAULT_CONFIG
 from .HeteroGraph import HeteroGraph
-from data.reader import load_lipop, load_freesolv
+from data.reader import load_lipop, load_freesolv, load_esol
 from utils.sample import sample
 from utils.cache import MatrixCache
 from net.models import MLP, AMPNN
@@ -41,6 +41,8 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
 
     if dataset == 'FreeSolv':
         smiles, info_list, properties = load_freesolv(limit, force_save=force_save)
+    elif dataset == 'ESOL':
+        smiles, info_list, properties = load_esol(limit, force_save=force_save)
     else:
         smiles, info_list, properties = load_lipop(limit, force_save=force_save)
     molecules = [HeteroGraph(info['nf'], info['ef'], info['us'], info['vs'], info['em']) for info in info_list]
