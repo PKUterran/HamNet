@@ -347,7 +347,7 @@ class PositionEncoder(Module):
                 self.cache[name] = pq
         return pq, 0, 0
 
-    def produce(self, smiles: str):
+    def get_info_from_smiles(self, smiles):
         nf, ef, us, vs = get_features_from_smiles(smiles)
         nf, ef = torch.from_numpy(nf).type(torch.float32), torch.from_numpy(ef).type(torch.float32)
         us, vs = us.tolist(), vs.tolist()
@@ -367,15 +367,21 @@ class PositionEncoder(Module):
         matrix_mask_tuple = (mol_node_matrix, mol_node_mask,
                              node_edge_matrix_global, node_edge_mask_global,
                              )
+        return nf, ef, us, vs, matrix_mask_tuple
 
+    def produce(self, smiles: str):
+        nf, ef, us, vs, matrix_mask_tuple = self.get_info_from_smiles(smiles)
         if self.use_rdkit:
             pos = self(nf, ef, us, vs, matrix_mask_tuple, [smiles]).detach().cpu().numpy()
-            tack = np.random.normal(0, 0.1, pos.shape)
-            return pos + tack
-            # return pos
+            return pos
         else:
             _, qs, _, _, _, _ = self(nf, ef, us, vs, matrix_mask_tuple, [smiles], return_multi=True)
         return [self.dn23(q).detach().cpu().numpy() for q in qs]
+
+    def test_loss(self, smiles: str, fit_pos: torch.Tensor):
+        nf, ef, us, vs, matrix_mask_tuple = self.get_info_from_smiles(smiles)
+        al, dl, rl, _, _, _ = self.fit(nf, ef, [smiles], us, vs, matrix_mask_tuple, fit_pos)
+        return al, dl, rl
 
     def verbose_print(self, ps, qs, mnm, nem, us, vs, verbose):
         if self.use_cuda:
