@@ -1,7 +1,7 @@
 from train.fitter import fit_qm9
 
 # normal
-TAG = '0909'
+TAG = '0920'
 fit_qm9(use_cuda=True,
         limit=-1,
         use_tqdm=False,
@@ -11,7 +11,7 @@ fit_qm9(use_cuda=True,
         )
 
 # no hamiltonian kernel
-TAG = '0909-noham'
+TAG = '0920-noham'
 fit_qm9(use_cuda=True,
         limit=-1,
         use_tqdm=False,
@@ -22,7 +22,7 @@ fit_qm9(use_cuda=True,
         )
 
 # no LSTM when producing p0 & q0
-TAG = '0909-nolstm'
+TAG = '0920-nolstm'
 fit_qm9(use_cuda=True,
         limit=-1,
         use_tqdm=False,
@@ -33,7 +33,7 @@ fit_qm9(use_cuda=True,
         )
 
 # no ADJ3 loss
-TAG = '0909-noadj'
+TAG = '0920-noadj'
 fit_qm9(use_cuda=True,
         limit=-1,
         use_tqdm=False,
