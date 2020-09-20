@@ -6,7 +6,7 @@ parser.add_argument('--layer', type=int, default=20)
 arg = parser.parse_args()
 layer = arg.layer
 
-TAG = '0909-l{}'.format(layer)
+TAG = '0920-l{}'.format(layer)
 fit_qm9(use_cuda=True,
         limit=-1,
         use_tqdm=False,
