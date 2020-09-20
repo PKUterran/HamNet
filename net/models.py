@@ -224,10 +224,12 @@ class HamiltonianPositionProducer(Module):
         s_loss = sum(s_losses)
         c_loss = sum(c_losses)
         # self.verbose_print(ps, qs, mol_node_matrix, node_edge_matrix, us, vs, verbose)
-        # final_p = ps[-1]
-        # final_q = qs[-1]
-        final_p = sum(ps) / len(ps)
-        final_q = sum(qs) / len(qs)
+        if self.dissipate:
+            final_p = ps[-1]
+            final_q = qs[-1]
+        else:
+            final_p = sum(ps) / len(ps)
+            final_q = sum(qs) / len(qs)
 
         if return_multi:
             return ps, qs, s_loss, c_loss, h, d
