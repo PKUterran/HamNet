@@ -29,8 +29,41 @@ def plt_dl(tag: str):
         plt.close()
 
 
-plt_dl('0920')
-plt_dl('0920-noham')
-plt_dl('0920-noadj')
-plt_dl('0909-nodis')
-plt_dl('0909-mpnn')
+def plt_lt(tag: str, xs: list, ys: list, y2s: list):
+    fig = plt.figure(figsize=(4.5, 4))
+    ax = fig.add_subplot(111)
+    n = len(xs)
+    ticks = xs
+    # ticks = list(range(n))
+    # plt.xticks(ticks, xs)
+    ax.plot(ticks, ys, label='loss', c='red')
+    ax2 = plt.twinx()
+    ax2.plot(ticks, y2s, label='time', c='blue')
+    ax.set_ylim(2.5, 3.1)
+    ax2.set_ylim(3, 10)
+    ax.set_xlabel('Layers')
+    ax.set_ylabel('Distance Loss (e-3)')
+    ax2.set_ylabel('Process Time (e+4 s)')
+    ax.legend(loc=2)
+    ax.grid()
+    ax2.legend(loc=0)
+    plt.savefig(FIG_PATH + tag + '.png')
+
+
+def plt_l(tag: str, xs: list, ys: list):
+    plt.figure(figsize=(4, 4))
+    n = len(xs)
+    ticks = list(range(n))
+    plt.xticks(ticks, xs)
+    plt.plot(ticks, ys, c='green')
+    plt.ylim(0, 10)
+    plt.xlabel('PQ Dimension')
+    plt.ylabel('Distance Loss (e-3)')
+    plt.grid()
+    plt.savefig(FIG_PATH + tag + '.png')
+
+
+plt_lt('Hamiltonian Engine Layers', [0, 4, 10, 20, 40],
+       [3.046, 2.761, 2.670, 2.689, 2.551], [3.8548, 3.9611, 5.0986, 5.9848, 8.8961])
+plt_l('PQ Dimension', [3, 8, 16, 32, 64],
+      [6.887, 5.025, 2.986, 2.689, 2.652])

@@ -9,6 +9,9 @@
 #SBATCH --qos=normal
 #SBATCH --ntasks-per-node=1
 
-python ham_layer.py --layer 4
-python ham_layer.py --layer 10
-python ham_layer.py --layer 40
+#python ham_layer.py --layer 4
+#python ham_layer.py --layer 10
+python ham_layer.py --layer 15
+python ham_layer.py --layer 30
+#python ham_layer.py --layer 40
+python ham_layer.py --layer 50
