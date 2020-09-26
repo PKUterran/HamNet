@@ -30,7 +30,7 @@ def plt_dl(tag: str):
 
 
 def plt_lt(tag: str, xs: list, ys: list, y2s: list):
-    fig = plt.figure(figsize=(4.5, 4))
+    fig = plt.figure(figsize=(5, 4))
     ax = fig.add_subplot(111)
     n = len(xs)
     ticks = xs
@@ -39,7 +39,7 @@ def plt_lt(tag: str, xs: list, ys: list, y2s: list):
     ax.plot(ticks, ys, label='loss', c='red')
     ax2 = plt.twinx()
     ax2.plot(ticks, y2s, label='time', c='blue')
-    ax.set_ylim(2.5, 3.1)
+    ax.set_ylim(2.3, 3.1)
     ax2.set_ylim(3, 10)
     ax.set_xlabel('Layers')
     ax.set_ylabel('Distance Loss (e-3)')
@@ -53,17 +53,18 @@ def plt_lt(tag: str, xs: list, ys: list, y2s: list):
 def plt_l(tag: str, xs: list, ys: list):
     plt.figure(figsize=(4, 4))
     n = len(xs)
-    ticks = list(range(n))
-    plt.xticks(ticks, xs)
+    ticks = xs
+    # ticks = list(range(n))
+    # plt.xticks(ticks, xs)
     plt.plot(ticks, ys, c='green')
-    plt.ylim(0, 10)
+    plt.ylim(2, 7)
     plt.xlabel('PQ Dimension')
     plt.ylabel('Distance Loss (e-3)')
     plt.grid()
     plt.savefig(FIG_PATH + tag + '.png')
 
 
-plt_lt('Hamiltonian Engine Layers', [0, 4, 10, 20, 40],
-       [3.046, 2.761, 2.670, 2.689, 2.551], [3.8548, 3.9611, 5.0986, 5.9848, 8.8961])
+plt_lt('Hamiltonian Engine Layers', [0, 4, 10, 15, 20, 30, 40],
+       [3.046, 2.761, 2.670, 2.582, 2.689, 2.389, 2.551], [3.8548, 3.9611, 5.0986, 4.4620, 5.9848, 6.3564, 8.8961])
 plt_l('PQ Dimension', [3, 8, 16, 32, 64],
       [6.887, 5.025, 2.986, 2.689, 2.652])
