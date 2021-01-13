@@ -92,7 +92,6 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
             print(name, ":", param.shape)
     optimizer = optim.Adam(filter(lambda x: x.requires_grad, chain(model.parameters(), regression.parameters())),
                            lr=cfg['LR'], weight_decay=cfg['DECAY'])
-    current_lr = cfg['LR']
     matrix_cache = MatrixCache(cfg['MAX_DICT'])
     loss_fuc = MSELoss()
     logs = []
@@ -135,8 +134,6 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
             loss = u_loss + std_loss
             loss.backward()
             optimizer.step()
-            nonlocal current_lr
-            current_lr *= 1 - cfg['DECAY']
 
         u_loss = np.average(u_losses)
         print('\t\tSemi-supervised loss: {:.4f}'.format(u_loss))
@@ -158,7 +155,7 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
             else:
                 name_ = None
             logits, target, _ = forward(m, name=name_)
-            loss = loss_fuc(logits, target) * prop_std[0]
+            loss = loss_fuc(logits, target)
             losses.append(loss.cpu().item())
 
             if visualize:
@@ -166,9 +163,8 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
                 logits_list.append(logits.cpu().detach().numpy())
                 target_list.append(target.cpu().detach().numpy())
 
-        mse_loss = np.average(losses)
-        rmse_loss = np.average([l ** 0.5 for l in losses])
-        # rmse_loss = np.average(losses) ** 0.5
+        mse_loss = np.average(losses) * (prop_std[0] ** 2)
+        rmse_loss = mse_loss ** 0.5
         print('\t\tMSE Loss: {:.3f}'.format(mse_loss))
         print('\t\tRMSE Loss: {:.3f}'.format(rmse_loss))
         logs[-1].update({'{}_loss'.format(name): mse_loss})
@@ -189,7 +185,6 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
     for epoch in range(cfg['ITERATION']):
         logs.append({'epoch': epoch + 1})
         print('In iteration {}:'.format(epoch + 1))
-        print('\tLearning rate: {:.8e}'.format(current_lr))
         print('\tTraining: ')
         train(train_mask_list, name='train')
         print('\tEvaluating training: ')

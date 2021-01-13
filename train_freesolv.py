@@ -30,7 +30,7 @@ train_lipop(seed=seed,
             tag=tag,
             dataset='FreeSolv',
             special_config={
-                'LR': 10 ** -4.0,
+                'LR': 10 ** -3.0,
                 'DECAY': 10 ** -3.0,
                 'DROPOUT': 0.5,
                 'ITERATION': 50,
