@@ -30,7 +30,7 @@ train_lipop(seed=seed,
             tag=tag,
             dataset='ESOL',
             special_config={
-                'LR': 10 ** -3.0,
+                'LR': 10 ** -2.5,
                 'DECAY': 10 ** -5.0,
                 'DROPOUT': 0.2,
                 'ITERATION': 300,
