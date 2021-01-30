@@ -118,6 +118,7 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
         model.train()
         regression.train()
         u_losses = []
+        losses = []
 
         t = enumerate(mask_list)
         if use_tqdm:
@@ -132,8 +133,13 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
             u_loss = loss_fuc(logits, target)
             u_losses.append(u_loss.cpu().item())
             loss = u_loss + std_loss
-            loss.backward()
-            optimizer.step()
+            # loss.backward()
+            # optimizer.step()
+            losses.append(loss)
+            if len(losses) >= cfg['PACK'] or i == len(mask_list) - 1:
+                (sum(losses) / len(losses)).backward()
+                optimizer.step()
+                losses.clear()
 
         u_loss = np.average(u_losses)
         print('\t\tSemi-supervised loss: {:.4f}'.format(u_loss))

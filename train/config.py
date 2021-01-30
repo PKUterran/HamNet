@@ -11,6 +11,7 @@ FITTER_CONFIG = {
     'DROPOUT': 0.2,
     'ITERATION': 30,
     'BATCH': 32,
+    'PACK': 1,
 
     'HGN_LAYERS': 20,
     'TAU': 0.025,
