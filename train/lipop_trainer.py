@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.optim as optim
+from torch.optim.lr_scheduler import ExponentialLR
 import gc
 import os
 import json
@@ -92,6 +93,7 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
             print(name, ":", param.shape)
     optimizer = optim.Adam(filter(lambda x: x.requires_grad, chain(model.parameters(), regression.parameters())),
                            lr=cfg['LR'], weight_decay=cfg['DECAY'])
+    scheduler = optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=1, gamma=config['GAMMA'])
     matrix_cache = MatrixCache(cfg['MAX_DICT'])
     loss_fuc = MSELoss()
     logs = []

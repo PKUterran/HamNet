@@ -7,6 +7,7 @@ FITTER_CONFIG = {
     'TEST_PER': 0.1,
 
     'LR': 1e-4,
+    'GAMMA': 1,
     'DECAY': 4e-5,
     'DROPOUT': 0.2,
     'ITERATION': 30,

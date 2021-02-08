@@ -31,6 +31,7 @@ train_lipop(seed=seed,
             dataset='FreeSolv',
             special_config={
                 'LR': 10 ** -2.5,
+                'GAMMA': 0.99,
                 'DECAY': 10 ** -5.0,
                 'DROPOUT': 0.2,
                 'ITERATION': 300,
