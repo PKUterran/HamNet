@@ -70,5 +70,5 @@ for tag, paths, higher_is_better in tag_path:
             # print('{}: {}'.format(tag, cor_test))
 
     avg = np.average(cor_tests)
-    bound = np.max(np.abs([c - avg for c in cor_tests]))
+    bound = np.std(cor_tests)
     print('{}: {:.3f} +- {:.3f}'.format(tag, avg, bound))
