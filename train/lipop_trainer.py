@@ -93,7 +93,7 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
             print(name, ":", param.shape)
     optimizer = optim.Adam(filter(lambda x: x.requires_grad, chain(model.parameters(), regression.parameters())),
                            lr=cfg['LR'], weight_decay=cfg['DECAY'])
-    scheduler = optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=1, gamma=config['GAMMA'])
+    scheduler = optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=1, gamma=cfg['GAMMA'])
     matrix_cache = MatrixCache(cfg['MAX_DICT'])
     loss_fuc = MSELoss()
     logs = []
