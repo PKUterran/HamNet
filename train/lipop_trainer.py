@@ -192,6 +192,7 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
 
     for epoch in range(cfg['ITERATION']):
         logs.append({'epoch': epoch + 1})
+        scheduler.step(epoch=epoch)
         print('In iteration {}:'.format(epoch + 1))
         print('\tTraining: ')
         train(train_mask_list, name='train')
