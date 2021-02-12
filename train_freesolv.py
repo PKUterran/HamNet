@@ -41,6 +41,6 @@ train_lipop(seed=seed,
                 'HE_DIM': 120,
                 'C_DIMS': [120, 120],
                 'F_DIM': 120,
-                'M_RADIUS': 2,
+                'M_RADIUS': 4,
             },
             )
