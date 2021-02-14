@@ -56,10 +56,13 @@ def train_lipop(seed: int = 19700101, limit: int = -1, use_cuda: bool = True, us
                                                   cfg['VALIDATE_PER'],
                                                   cfg['TEST_PER'])
     n_seg = int(len(train_mask) / (cfg['BATCH'] + 1))
+    n_seg = min(len(train_mask), n_seg)
     train_mask_list = [train_mask[i::n_seg] for i in range(n_seg)]
     n_seg = int(len(validate_mask) / (cfg['BATCH'] + 1))
+    n_seg = min(len(validate_mask), n_seg)
     validate_mask_list = [validate_mask[i::n_seg] for i in range(n_seg)]
     n_seg = int(len(test_mask) / (cfg['BATCH'] + 1))
+    n_seg = min(len(test_mask), n_seg)
     test_mask_list = [test_mask[i::n_seg] for i in range(n_seg)]
     print(train_mask[0], validate_mask[0], test_mask[0])
     print(len(train_mask_list), len(validate_mask_list), len(test_mask_list))
